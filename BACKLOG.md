@@ -143,23 +143,47 @@ validate demand, or genuine future-phase structural work.
 - `[ ]` **Per-car insight tiles** — S. Max-ever-fuel, best-MPG,
   worst-MPG, longest interval between fills, average cost/mile.
   Computed client-side from the fetched entries. v2-ish.
-- `[ ]` **"Longest tank" outlier from data gaps** — S. Bug, filed
-  2026-05-29 after the log-screen-stats ship. A missed/forgotten
-  fill-up makes one odometer delta span *two* tanks, so "Longest
-  tank" reads ~2× typical: Rocket shows 479 mi, Rockette 494 mi —
-  each conveniently ~double the real max. The math is correct; the
-  input has a hole. These are physically-impossible single tanks and
-  should be detectable as such: a real tank can't exceed
-  `largestFill (gal) × bestPlausibleMpg` — so a delta implying an
-  MPG above a plausibility ceiling (e.g. the pair's `delta/gallons`
-  exceeding P95 MPG, or a fixed sanity cap) is a gap, not a tank.
-  Same outlier the P95/percentile stats already sidestep on the MPG
-  side. Light followup: **exclude** implausible deltas in
-  `longestTank` (owner decided 2026-05-29 — silently skip the bad
-  delta so it shows the true ~240 mi, matching how the MPG stats
-  already drop the gap pair; not flag/surface), with a unit test
-  using the Rocket/Rockette gap shape. NOT urgent — the stat is
-  "fun/vanity," not pump-critical.
+- `[ ]` **Suspect-data detector (anomaly flag)** — S, MAY NOT BE
+  ACTIONABLE (see "open question" below — file now, decide later).
+  Idea from the 2026-05-29 gap-fix discussion. Pure derived check
+  over existing entries (no schema/rules/data-model change; same
+  `computeStats` median/percentile machinery) that flags suspicious
+  per-fill pairs and **classifies by signature** — neither inventing
+  data nor silently skipping it, just surfacing it for human
+  judgment:
+  - **Compensating pair** (abnormally low MPG immediately followed by
+    abnormally high, deltas summing plausibly) → likely a **typo** on
+    one entry's odometer. CORRECTABLE today via the edit feature →
+    flag links to the row: "Looks like a typo — odometer may be off.
+    [Edit]".
+  - **Lone high outlier** (high MPG/distance, no compensating
+    neighbor) → likely a **missing fill**. NOT correctable with real
+    data → informational only: "Possible missing fill here — stats
+    skip this gap."
+  Surface as a quiet "⚠ N suspect entries" affordance on the
+  car-detail screen linking to the row(s).
+  Why it might be worth it: the real pain isn't the math (the stats
+  are already robust — P95 + longest-tank skip gaps; lifetime
+  self-corrects for typos since the errors cancel in the sum, and is
+  only ~2-5% high for a true missing fill). The pain is
+  **discoverability** — the one Caterham typo was found by manually
+  digging through the CSV. A detector turns that into a glance.
+  **Open question / why it may not be actionable**: with prod data
+  now clean (the Caterham typo was edited; the known gaps are
+  understood), there may be ~nothing left to detect at family scale —
+  bad rows arrive ~1/year. The detector earns its keep only if
+  suspect data recurs often enough that hunting it by hand is
+  annoying. Revisit if/when a second "these numbers look wrong"
+  moment happens; until then it's speculative.
+  Related decision (same discussion): **in-app backfill is probably
+  NOT worth building.** Its real use is repairing data; the
+  repairable cases are typos (edit already handles them) and truly-
+  missing fills can't be backfilled with real numbers anyway. The
+  heavyweight historical-insert (editable fill-date field, or
+  switching the sort from `loggedAt` to `odometer` — touches schema,
+  rules, form, and every stat that assumes current ordering) buys
+  little over detector + existing edit. Filed here as the rationale;
+  no separate backfill item created on purpose.
 - `[ ]` **Trends over time** — M. Charts for MPG-over-time,
   cost-over-time, gallons-over-time per car. Needs a charting
   library (chart.js or similar; pick during dispatch).
@@ -329,6 +353,22 @@ validate demand, or genuine future-phase structural work.
 
 ## Done
 
+- `[x]` **"Longest tank" outlier from data gaps** — done 2026-05-29
+  (same day it was filed). A missed/under-recorded fill made one
+  odometer delta span two tanks, so "Longest tank" read ~2× typical:
+  Rocket 479 mi, Rockette 494 mi, Seven 518 mi. The math was correct;
+  the input had a hole. Fix in `computeStats.ts` `longestTank`:
+  exclude any delta whose implied per-fill MPG exceeds **1.5× the
+  car's median per-fill MPG** (a gap inflates both distance and
+  implied MPG ~2×, so it self-identifies). Threshold grounded in the
+  real fleet data — legit tanks top out ~1.3× median, gaps land
+  1.6×+. Owner approved 1.5× (also catches the Caterham's fuel-can
+  top-ups, whose under-recorded gallons read as 46–65 mpg). Verified
+  against the CSV: Rocket→283, Rockette→305, Seven→249. Scoped to
+  `longestTank` only — the percentile MPG stats are unaffected (the
+  gap sits below P95). +3 unit tests (gap exclusion, plausible-long
+  kept, <2-pair fallback). Falls back to raw max delta when <2 MPG
+  pairs (no distribution to judge against).
 - `[x]` **Custom domain** — done 2026-05-29 as part of the prod
   cutover (pulled forward from Later on the day). `flog-prod` now
   serves at **`https://flog.austindavid.com`** (Firebase Hosting

@@ -181,6 +181,70 @@ describe('longestTank', () => {
     ];
     expect(longestTank(entries)).toBe(300);
   });
+
+  // --- Data-gap exclusion (missed/under-recorded fill) -------------------
+  //
+  // A forgotten fill makes one odometer delta span two tanks: the
+  // distance ~doubles but the recorded gallons cover only one tank, so
+  // the implied per-fill MPG ~doubles too. We exclude any delta whose
+  // implied MPG > 1.5x the car's median per-fill MPG. Modeled on the
+  // real Rocket/Rockette/Seven gaps (2026-05-29 data analysis).
+  //
+  // Fixture (newest-first), all 10-gal fills:
+  //   odos: 1550, 1300, 800, 500, 250, 0
+  //   pairs (delta / gal = mpg):
+  //     1550→1300: 250/10 = 25   (normal)
+  //     1300→800 : 500/10 = 50   ← GAP (2.0x median → excluded)
+  //     800 →500 : 300/10 = 30   (legit long tank, 1.2x median → kept)
+  //     500 →250 : 250/10 = 25   (normal)
+  //     250 →0   : 250/10 = 25   (normal)
+  //   validMpgs = [25, 50, 30, 25, 25]; median = 25; threshold = 37.5
+  //   Raw max delta = 500 (the gap). After exclusion, longest = 300.
+  it('excludes a missed-fill gap (implausible implied MPG) tank', () => {
+    const entries = [
+      e('f', 1550, 10),
+      e('e', 1300, 10),
+      e('d', 800, 10),
+      e('c', 500, 10),
+      e('b', 250, 10),
+      e('a', 0, 10),
+    ];
+    // The 500 mi "tank" implies 50 mpg (2x the 25 mpg median) — a gap.
+    // Longest *plausible* tank is the 300 mi / 30 mpg one.
+    expect(longestTank(entries)).toBe(300);
+    // Guard: the raw (un-filtered) max delta is 500. If gap exclusion
+    // regressed, this would read 500 instead of 300.
+    expect(longestTank(entries)).not.toBe(500);
+  });
+
+  it('keeps a long-but-plausible tank (just under the 1.5x line)', () => {
+    // The longest-DISTANCE tank here implies 1.4x median MPG (< 1.5x),
+    // so it is a legit long run, not a gap — must be KEPT. Guards
+    // against over-filtering real highway tanks (e.g. Rockette's 305mi).
+    // odos (newest-first): 1050, 700, 450, 200, 0; 10 gal each
+    //   1050→700: 350/10 = 35  ← longest distance; 35/25 = 1.4x → KEEP
+    //   700 →450: 250/10 = 25
+    //   450 →200: 250/10 = 25
+    //   200 →0  : 200/10 = 20
+    //   validMpgs = [35, 25, 25, 20]; median = 25; threshold = 37.5
+    //   35 < 37.5 → kept. Longest = 350.
+    const entries = [
+      e('e', 1050, 10),
+      e('d', 700, 10),
+      e('c', 450, 10),
+      e('b', 200, 10),
+      e('a', 0, 10),
+    ];
+    expect(longestTank(entries)).toBe(350);
+  });
+
+  it('cannot detect a gap with <2 MPG pairs — returns raw max delta', () => {
+    // Only one valid pair → no median to judge against → no filtering.
+    // 600-100 = 500 mi at 50 mpg looks like a gap, but with a single
+    // pair there's no distribution; best effort returns the raw delta.
+    const entries = [e('b', 600, 10), e('a', 100, 10)];
+    expect(longestTank(entries)).toBe(500);
+  });
 });
 
 // ---------------------------------------------------------------------------
