@@ -10,6 +10,12 @@ dist/
 # local-only dispatch outputs (Firebase config etc.)
 dispatch/M1-g-outputs.md
 
+# data imports — contain family emails / PII; never commit (public repo)
+*.csv
+# one-time history-import service-account key + local map (local only)
+service-account*.json
+scripts/*.local.json
+
 sync.sh
 
 # firebase CLI state

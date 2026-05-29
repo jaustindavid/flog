@@ -83,55 +83,16 @@ Likely to come up in the first weeks post-v0, in roughly this order
   create rule). Trigger: a family member asks for it, OR M5's per-
   car entries view makes us want fill-up context for outliers.
 
-- `[ ]` **Refactor data-fetch hooks to a subscribe-style abstraction**
-  — S. Promoted from Later → Soon at M4 closure (2026-05-28).
-  Trigger met: `useCars`, `useCar`, and (after M5) `useEntries`
-  all ship narrow `eslint-disable-next-line react-hooks/set-state-
-  in-effect` suppressions because the rule conservatively flags
-  setState reachable from a useEffect-invoked callable — including
-  ones gated by an epoch race guard. A tiny custom abstraction
-  (`createSubscribableQuery(fn): { subscribe, refresh, getState }`
-  or similar) lets each hook subscribe via a callback that fires
-  setState from a subscription path, organically satisfying the
-  rule. Refactor all three hooks together so the codebase is
-  consistent. Open questions to settle before promoting to Next:
-  hand-rolled abstraction vs. tiny library (e.g., a lightweight
-  observable helper; AGENTS guardrail still rules out big query
-  libraries like react-query for v0); whether to use this as the
-  moment to introduce a shared `src/lib/queryHook.ts` or keep the
-  pattern inlined per-hook; how to preserve the existing per-hook
-  refresh-after-mutation pattern. Three suppressions is the cost
-  ceiling — fourth would mean we've definitely missed earned
-  cleanup.
-
 - `[ ]` **CSV export of your data** — S. Committed in PRD §1.4 as
   part of "your data is yours." Per-user: export all entries
   authored by you, plus all entries on cars you own. Open
   questions: format (column order, header naming), scope (owner
   perspective vs sharee perspective), one CSV per car vs combined.
-
-- `[ ]` **CSV import of existing data** — S. **Quick-promote
-  candidate for next-after-M4.** Use case: the family has years
-  of Google-Form fill-up data in a spreadsheet; the cutover
-  loses history unless we backfill. Per-car bulk import:
-  upload CSV (matching the export shape from the sibling
-  item), parse, validate each row (reuse `validateOdometer` /
-  `validateGallons` / `validateCost`), batched write to the
-  car's entries subcollection with `loggedAt` derived from a
-  CSV timestamp column (this needs a deliberate PRD §5.3
-  decision — the v0 entries spec has `loggedAt` server-set and
-  not user-editable; import would need to bypass that with a
-  one-shot `loggedAt` field acceptable on create-only). Open
-  questions to settle before promoting to Next: who can import
-  (owner only, or any car-reader); column-set contract
-  (probably mirror the M2-shipped export shape exactly so
-  round-trip works); error handling for partial rows (atomic
-  batch fail OR per-row report); de-dup against existing
-  entries (skip-on-match, error-on-match, or merge); and
-  whether the import flow exposes a UI or stays admin-only
-  via Firebase Console + a script. Pairs naturally with the
-  CSV export item above — implement export first, then import
-  consumes the export shape.
+  (Note: the old "implement export first so import consumes its
+  shape" coupling is gone — the import need was met by the one-off
+  `scripts/import-history.mjs`, not a round-trip feature. Export
+  now stands alone, and is low-urgency — no users until well past
+  launch.)
 
 - `[~]` **Cars-screen quick-action kebab menu** — S. **Design
   captured 2026-05-29** (UI design memo + owner decisions);
@@ -259,6 +220,25 @@ validate demand, or genuine future-phase structural work.
   deploy:{dev,prod}` is manual. GitHub Actions could run gates +
   auto-deploy dev on main + require manual approval for prod. Worth
   it when manual deploys start feeling like risk; not before.
+- `[ ]` **Refactor data-fetch hooks to a subscribe-style abstraction**
+  — S. **Moved Soon → Later 2026-05-29** after a cost/benefit
+  check: with v0 near feature-complete and little future mutation
+  expected, the payoff (mostly future-facing — fewer bugs in
+  *future* hooks, one shared pattern) is near-negligible, while the
+  refactor *adds* risk by touching three working, dev-verified
+  hooks (`useCars`, `useCar`, `useEntries`). The
+  `eslint-disable-next-line react-hooks/set-state-in-effect`
+  suppression each carries is narrow, commented, and correct — a
+  fine permanent end-state. The "earned at the third suppression"
+  trigger assumed an actively-growing codebase; that premise no
+  longer holds. **Revised trigger: only revisit if active feature
+  development resumes AND a 4th data-fetch hook appears** — at that
+  point a shared `src/lib` query helper (hand-rolled, ~120-180 LOC;
+  `useSyncExternalStore` or a tiny custom store; NOT react-query
+  per AGENTS) earns its keep. The sharp edge if/when done:
+  parameterized per-`carId` store lifecycle (recreate, re-subscribe,
+  and refetch on carId change) is the bug-prone spot. Must preserve
+  the imperative `refresh()` the screens call after mutations.
 - `[ ]` **Aggregate doc for per-car MPG** — S. Cached
   `cars/{carId}/aggregate` updated on entry write, so per-car
   detail view doesn't fetch all entries (M5 shipped without a
@@ -336,6 +316,21 @@ validate demand, or genuine future-phase structural work.
 ---
 
 ## Done
+
+- `[x]` **CSV import of existing data** — met 2026-05-29, **not as
+  the user-facing feature originally imagined.** The real need was a
+  one-time backfill of the family's Google-Form history (5 cars in
+  the export; 3 carried over), so we built a one-off Admin-SDK
+  script (`scripts/import-history.mjs`, docs in `scripts/README.md`)
+  instead of an in-app import UI. It dry-run + live-imported 146
+  fuel entries to `flog-dev` across Seven/Rocket/Rockette with
+  correct per-logger attribution; verified in-app. The script is
+  parameterized (key + car-map + CSV) and ready to re-run at prod
+  cutover (see `dispatch/runbooks/prod-cutover.md` §5). The
+  Admin SDK bypasses rules, so the feared PRD §5.3 `loggedAt`-on-
+  create amendment was never needed. No recurring import feature is
+  planned — if one's ever wanted, this Done entry + the script are
+  the starting point.
 
 - `[x]` **Edit / delete entries** — shipped to `flog-dev`
   2026-05-29 (dispatch `edit-delete-entries`), owner-verified on a

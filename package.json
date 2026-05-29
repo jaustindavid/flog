@@ -17,7 +17,8 @@
     "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\" \"#.firebase\" \"#dispatch/M1-g-outputs.md\"",
     "test": "vitest run",
-    "test:rules": "firebase --project=flog-rules-test emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase --project=flog-rules-test emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
+    "import:history": "node scripts/import-history.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",
@@ -36,6 +37,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "firebase-admin": "^13.10.0",
     "globals": "^17.6.0",
     "markdownlint-cli2": "^0.14.0",
     "tailwindcss": "^4.0.0",
