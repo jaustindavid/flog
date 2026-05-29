@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Primary accent color: Tailwind blue-600. Matches Google Sign-in
+   button conventions; honest default per dispatch §4 #11. The token
+   is referenced via the standard `blue-600` utility — exposing it as
+   `--color-primary` here gives future components an alias that can
+   point elsewhere without a sweep of `bg-blue-600` usages. */
+@theme {
+  --color-primary: var(--color-blue-600);
+  --color-primary-hover: var(--color-blue-700);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 150ms ease-out;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overscroll-behavior: none;
+}

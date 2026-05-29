@@ -1,0 +1,106 @@
+rules_version = '2';
+
+// flog Firestore rules — translation of PRD §6 access control matrix.
+// ADMIN_EMAIL is hardcoded (bootstrap-admin carve-out per PRD §5.4
+// + §6 helper). Same literal in dev and prod deployments.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function allowed(email) {
+      return email == 'austindavid@gmail.com'
+          || exists(/databases/$(database)/documents/allowlist/$(email));
+    }
+
+    // PRD §6.1 — User
+    match /users/{userId} {
+      allow read: if request.auth != null
+                     && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+                       && request.auth.uid == userId
+                       && allowed(request.auth.token.email);
+
+      allow update: if request.auth != null
+                       && request.auth.uid == userId
+                       && request.resource.data.diff(resource.data)
+                            .affectedKeys()
+                            .hasOnly(['displayName']);
+
+      allow delete: if false;
+    }
+
+    // PRD §6.2 — Car
+    match /cars/{carId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerUid == request.auth.uid
+        || request.auth.token.email in resource.data.shareeEmails
+      );
+
+      allow create: if request.auth != null
+                       && allowed(request.auth.token.email)
+                       && request.resource.data.ownerUid == request.auth.uid;
+
+      allow update: if request.auth != null
+                       && resource.data.ownerUid == request.auth.uid
+                       && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      allow delete: if request.auth != null
+                       && resource.data.ownerUid == request.auth.uid;
+
+      // PRD §6.3 — Entry
+      match /entries/{entryId} {
+        function parentCar() {
+          return get(/databases/$(database)/documents/cars/$(carId)).data;
+        }
+        function canReadParent() {
+          return request.auth != null && (
+            parentCar().ownerUid == request.auth.uid
+            || request.auth.token.email in parentCar().shareeEmails
+          );
+        }
+
+        allow read: if canReadParent();
+
+        allow create: if canReadParent()
+                         && request.resource.data.loggedByUid == request.auth.uid;
+
+        allow update: if false;
+
+        // M4: parent-car owner can delete entries — needed for the
+        // cascade in src/cars/cars.ts deleteCar (M3 Decision #6,
+        // implemented this dispatch). Sharees cannot delete. Reuses
+        // the parentCar() helper above so the rule shape matches the
+        // existing read/create gates.
+        allow delete: if request.auth != null
+                         && parentCar().ownerUid == request.auth.uid;
+      }
+    }
+
+    // Allowlist — derived from PRD §6.4 with one M3-time amendment:
+    // read is broadened from "self only" to "any allowlisted user"
+    // (see M3 V2 fix-forward 2026-05-28). Reason: shareCar's read-
+    // then-conditional-batch pattern (M3 brief Decision #16) needs
+    // to pre-read another email's allowlist doc to decide whether
+    // the batch includes a set. With self-only read, that pre-read
+    // denies and the whole share flow fails. Privacy cost at family
+    // scale is negligible — allowlist docs are empty {} and the
+    // exposure is just "is this email in the set." PRD §6.4 needs
+    // a corresponding amendment.
+    match /allowlist/{userEmail} {
+      allow read: if request.auth != null
+                     && allowed(request.auth.token.email);
+
+      // The *requesting* user must be allowlisted to add a new email
+      // (e.g., share-with-user side effect in M3). See dispatch
+      // M2-auth-allowlist.md §7.3 — do NOT write allowed(userEmail).
+      allow create: if request.auth != null
+                       && allowed(request.auth.token.email);
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+                       && request.auth.token.email == 'austindavid@gmail.com';
+    }
+  }
+}

@@ -1,0 +1,39 @@
+// flog — markdownlint configuration
+// Enforces 80-column wrap on prose (MD013) per AGENTS.md.
+// Tables, code blocks, and headings are exempt — they don't wrap
+// meaningfully and forcing wraps there harms readability.
+{
+  "default": true,
+
+  // 80-col line length, with carve-outs for content that doesn't wrap.
+  "MD013": {
+    "line_length": 80,
+    "tables": false,
+    "code_blocks": false,
+    "headings": false
+  },
+
+  // Allow repeated heading text in different sections (e.g., multiple
+  // "Lifecycle" subsections under different entities in PRD §5).
+  "MD024": {
+    "siblings_only": true
+  },
+
+  // We don't use raw HTML, but allowing avoids friction if a future
+  // edit needs it for accessibility (e.g., aria-label workarounds).
+  "MD033": false,
+
+  // MD036 (no-emphasis-as-heading): disabled because we use **bold**
+  // as inline emphasis at the start of bullet items frequently; the
+  // rule flags too many false positives in our prose style.
+  "MD036": false,
+
+  // MD049/MD050 (emphasis-style): disabled. Project convention
+  // mixes styles deliberately — copyright lines use underscore
+  // italics (`_Copyright © ..._`) per the kit; prose uses asterisk
+  // bold/italic (`*x*` / `**x**`). MD049/MD050 can only enforce one
+  // or the other, not both. Disabling avoids forcing a convention
+  // change that the kit established.
+  "MD049": false,
+  "MD050": false
+}

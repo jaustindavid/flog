@@ -1,0 +1,27 @@
+node_modules/
+dist/
+
+# env files (real values; never committed)
+.env.development
+.env.production
+.env.local
+.env.*.local
+
+# local-only dispatch outputs (Firebase config etc.)
+dispatch/M1-g-outputs.md
+
+sync.sh
+
+# firebase CLI state
+.firebase/
+.firebaserc
+
+# Claude Code local settings (per-machine; never committed)
+.claude/settings.local.json
+
+# misc
+*.log
+.DS_Store
+
+# TypeScript build cache
+*.tsbuildinfo
