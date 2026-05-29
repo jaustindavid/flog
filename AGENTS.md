@@ -175,12 +175,32 @@ The cost of pausing is low; the cost of a reverted PR is higher.
 
 ## Project identity
 
-flog is a **private, personal project** belonging to Austin David.
-All rights reserved.
+flog is a personal project by Austin David, published
+**source-available** on a public repository under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). Copyright © 2026
+Austin David.
 
-Treat planning docs and code accordingly: no public posting of
-internals, no copying to other repos, no inclusion in training-data
-exports. If unclear, ask.
+The license grants anyone the right to use, modify, and redistribute
+flog for any **noncommercial** purpose, provided the copyright and
+license notices are preserved (that's the attribution requirement).
+Commercial use requires a separate arrangement with the owner. The
+per-document `All rights reserved` header and this license coexist:
+the copyright notice asserts ownership; `LICENSE` grants the specific
+rights above.
+
+Practical consequences for contributors and coding agents:
+
+- **The repo is public.** Write docs and code accordingly — no
+  secrets in source (Firebase config keys are public-by-design and
+  fine; everything in `.env.*` stays gitignored).
+- **Preserve the copyright + license notices** in any copy or
+  derivative — the license's attribution requirement, and the
+  `Required Notice:` line in `LICENSE`.
+- **Human review on every change remains required** — partly for code
+  quality, partly for IP clarity on AI-collaborative work (see Commit
+  & PR hygiene).
+
+If licensing intent is ever unclear, ask the owner.
 
 ---
 

@@ -23,9 +23,9 @@ owner deploy + manual test is owner-only (flagged, not run).
 - ✅ **R2** `delete` rule moved from owner-only to `canMutate()`.
 - ✅ **R3** `loggedByUid` / `loggedAt` immutable on update — two
   negative rules tests (write that also includes each key → denied).
-- ⚠️ **R4** Rules deploy is the owner V2 step (`deploy:rules:dev`),
-  not run from dispatch. Rules compile clean under the emulator (all
-  rules tests pass).
+- ✅ **R4** Rules deployed to `flog-dev` 2026-05-29
+  (`deploy:rules:dev`); owner V2 confirmed edit/delete work and
+  the immutability holds (see V2).
 
 ### D — Data module
 
@@ -96,9 +96,69 @@ owner deploy + manual test is owner-only (flagged, not run).
 ### V — Build / verification
 
 - ✅ **V1** `build:dev` + `build:prod` exit 0. Bundle delta below.
-- ⚠️ **V2** Owner manual test — NOT run (owner-only). Needs BOTH
-  `npm run deploy:dev` AND `npm run deploy:rules:dev` (rules changed).
+- ✅ **V2** Owner manual test completed 2026-05-29 on a Pixel
+  (combined A+B+E deploy + `deploy:rules:dev`). Edit pre-fills
+  and saves; delete + nested-dismiss work; **Firestore Console
+  confirmed `loggedByUid`/`loggedAt` unchanged after an edit**
+  (the immutability proof). Sharee-edits-own confirmed (after a
+  transient — see Post-ship findings). All green.
 - ✅ **V3** No prod deploy.
+
+---
+
+## Post-ship findings (2026-05-29 V2)
+
+Two items surfaced during owner V2; one fixed nautilus-inline,
+one a watch-item.
+
+### 1. Gallons precision — data loss on edit (FIXED inline)
+
+**Symptom**: US pumps dispense to 0.001 gal (e.g. 5.001). Owner
+flagged that the display truncated and was unsure the value was
+preserved.
+
+**Findings**:
+
+- *Create* preserves full precision — `validateGallons` uses
+  `Number()` and `NumericField` caps nothing, so 5.001 is stored
+  intact. Not a bug.
+- *Display* truncated: `EntriesTable` showed `gallons.toFixed(2)`
+  → 5.001 rendered "5.00". Cosmetic.
+- *Edit* destroyed it: `EditEntryModal` pre-filled the gallons
+  field with `entry.gallons.toFixed(2)` → "5.00", so saving any
+  edit overwrote 5.001 with 5.00. **Real data loss on edit.**
+
+**Fix (nautilus-inline, XS, post-V2)**:
+
+- `EditEntryModal.tsx` — gallons pre-fill `toFixed(2)` →
+  `String(entry.gallons)` (preserves full stored precision).
+  Cost stays `toFixed(2)` (dollars); odometer integer.
+- `EntriesTable.tsx` — gallons display `toFixed(2)` →
+  `toFixed(3)` (US pump precision; comment updated). Cost/odo
+  unchanged.
+
+Gates re-run clean (lint, 80 unit tests, build). Owner
+re-deployed and confirmed the round-trip: 5.001/5.002/5.003
+preserved + editable. (This touched one M5 file — `EntriesTable`
+— and one E file — `EditEntryModal`; recorded here as the most
+recent owner of both surfaces.)
+
+### 2. Sharee edit row not clickable — transient (WATCH)
+
+**Symptom**: on first attempt, a row the sharee logged wasn't
+tappable as the sharee. After the next push + reload it was
+clickable as expected (owner could not reproduce).
+
+**Status**: chalked up to transient (likely a stale entries
+fetch / pre-rules-deploy state during the multi-step verify).
+The code path is correct: `createEntry` sets `loggedByUid` to
+the logging user; `canEditEntry = isOwner || loggedByUid ===
+user?.uid` makes the sharee's own rows editable. Owner will
+re-raise if it recurs. **Latent UX note**: editable-row
+affordance leans on hover/cursor styling, which touch devices
+lack — a clearer touch affordance (edit glyph/chevron on
+editable rows) is a candidate small follow-up if discoverability
+ever confuses a family member.
 
 ---
 

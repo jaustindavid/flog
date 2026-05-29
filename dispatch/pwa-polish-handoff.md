@@ -17,10 +17,8 @@ shipped; B = this; C = cars-screen kebab).
   JSON from brief §3. Valid JSON; all required fields present
   (name, short_name, start_url, scope, display, background_color,
   theme_color, two icons with `purpose: "any maskable"`).
-- ⚠️ **M2** Manifest validates in DevTools — owner-only V-step.
-  The JSON is schema-correct and the icon paths resolve correctly
-  via Vite's `public/` passthrough (confirmed in `dist/` after
-  build). Browser-side DevTools validation requires a live deploy.
+- ✅ **M2** Manifest validated on the live dev deploy 2026-05-29;
+  installability confirmed (see V1).
 - ✅ **H1** `index.html` `<head>` gains all five tags exactly as
   specified: `theme-color` meta, `.ico` link, 32px PNG link, 16px
   PNG link, manifest link.
@@ -37,8 +35,9 @@ shipped; B = this; C = cars-screen kebab).
   exits 0. `dist/` contains all six expected files:
   `manifest.webmanifest`, `icon-192.png`, `icon-512.png`,
   `favicon.ico`, `favicon-32.png`, `favicon-16.png`.
-- ⚠️ **V1** Owner-only step (post `npm run deploy:dev`). Not
-  executed by this cuttlefish — see Manual steps below.
+- ✅ **V1** Owner verified 2026-05-29 on a Pixel: installed to
+  home screen, blue flog logo tile, launches standalone with
+  blue status bar; favicon shows in tab; no tap-flash / bounce.
 - ✅ **V2** No prod deploy.
 
 ## Versions chosen

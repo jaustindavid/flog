@@ -307,6 +307,18 @@ validate demand, or genuine future-phase structural work.
   Entries OR restructuring the entries-read rule to avoid the
   parent get(). Verify with a counted-reads integration test or
   Firebase Console quota observation while M4 exercises entries.
+- `[ ]` **Clearer touch affordance on editable entry rows** — XS.
+  The edit-delete-entries dispatch made editable rows in the
+  per-car `EntriesTable` tappable, but the affordance leans on
+  hover/cursor styling — touch devices (the Pixel family) have no
+  hover, so an editable row may not look distinct from a static
+  one. Owner hit a transient "can't tap my own row" during V2
+  (resolved on reload; chalked up to stale state, not this). If
+  discoverability ever confuses a family member, add a visible
+  cue on editable rows — a small edit glyph / chevron on the
+  right edge. Trigger: a real "I didn't know I could tap that"
+  report. Low priority; the owner can tap any row he owns and the
+  primary user (owner) sees all rows editable anyway.
 - `[ ]` **Modal focus-trap + ARIA pass** — XS to S. M3 modals
   (AddCarModal, ConfirmDialog) ship with the brief §9 #10
   accessibility floor (autofocus + Esc + Cancel) but no focus-
