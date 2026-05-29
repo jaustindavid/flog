@@ -15,12 +15,14 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit as fbLimit,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   writeBatch,
   type Timestamp,
 } from 'firebase/firestore';
@@ -73,6 +75,36 @@ export async function createEntry(
     }
   );
   return ref.id;
+}
+
+export async function updateEntry(
+  carId: string,
+  entryId: string,
+  fields: { odometer: number; gallons: number; cost: number }
+): Promise<void> {
+  // Edit path (edit-delete-entries dispatch). Writes ONLY the three
+  // numeric fields — never loggedByUid, never loggedAt. Both stay
+  // immutable: loggedByUid by authorship, loggedAt by the AGENTS
+  // "always serverTimestamp" guardrail. The entries `update` rule's
+  // hasOnly(['odometer','gallons','cost']) enforces this server-side;
+  // this client write matches exactly so the diff's affectedKeys is
+  // always exactly those three keys.
+  await updateDoc(doc(firestore, 'cars', carId, 'entries', entryId), {
+    odometer: fields.odometer,
+    gallons: fields.gallons,
+    cost: fields.cost,
+  });
+}
+
+export async function deleteEntry(
+  carId: string,
+  entryId: string
+): Promise<void> {
+  // Single-entry delete (edit-delete-entries dispatch). Distinct from
+  // deleteEntriesForCar, which cascades the whole subcollection on
+  // car-delete. Behind a ConfirmDialog at the UI layer; the rule
+  // permits parent-car owner or the original logger (canMutate()).
+  await deleteDoc(doc(firestore, 'cars', carId, 'entries', entryId));
 }
 
 export async function getLatestEntry(carId: string): Promise<Entry | null> {

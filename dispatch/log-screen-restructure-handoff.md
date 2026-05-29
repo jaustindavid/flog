@@ -65,9 +65,11 @@ Acceptance criteria from brief §8:
   - Module count: 92 (unchanged — pure reuse; no new imports of
     previously-unbundled modules since `useEntries` / `computeMpg`
     / `MpgTile` were already in the bundle via `CarDetailScreen`).
-- ⚠️ **V2** Owner-deploy step (`npm run deploy:dev` + manual
-  verification on Pixel 6/7a/9) — flagged as owner-only; not
-  executed by this cuttlefish. Checklist in brief §8 V2 stands.
+- ✅ **V2** Owner manual verification completed 2026-05-29 on a
+  Pixel (combined A+B+E deploy). MPG tiles render below Save
+  matching the car-detail numbers; fade on car-switch; hidden
+  at 0 entries; "—"+"need 2+ fills" at 1 entry; refresh on save
+  confirmed. All green.
 - ✅ **V3** No prod deploy attempted.
 
 ## Versions chosen

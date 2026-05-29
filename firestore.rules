@@ -60,20 +60,46 @@ service cloud.firestore {
           );
         }
 
+        // Owner of the parent car may edit/delete ANY entry on it.
+        // The original logger may edit/delete their OWN entry, but
+        // only while they still have read access to the car —
+        // canReadParent() closes the unshared-former-sharee hole (a
+        // removed sharee can't reach back and mutate their old
+        // entries).
+        //
+        // Null-safety (edit-delete-entries dispatch 2026-05-29): the
+        // owner branch parentCar().ownerUid == request.auth.uid is
+        // safe on an unauthenticated request because request.auth.uid
+        // is then null and parentCar().ownerUid == null is false — the
+        // unauth caller falls through to the logger branch, where
+        // canReadParent()'s own request.auth != null check denies. The
+        // owner branch's safety does NOT come from canReadParent();
+        // that helper only guards the logger branch.
+        function canMutate() {
+          return parentCar().ownerUid == request.auth.uid
+              || (canReadParent()
+                  && resource.data.loggedByUid == request.auth.uid);
+        }
+
         allow read: if canReadParent();
 
         allow create: if canReadParent()
                          && request.resource.data.loggedByUid == request.auth.uid;
 
-        allow update: if false;
+        // edit-delete-entries dispatch 2026-05-29: relaxed from
+        // `if false`. odometer/gallons/cost editable; the hasOnly
+        // guard makes loggedByUid and loggedAt immutable on update
+        // (same field-restriction idiom M2 used for User displayName).
+        allow update: if canMutate()
+                         && request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['odometer', 'gallons', 'cost']);
 
-        // M4: parent-car owner can delete entries — needed for the
-        // cascade in src/cars/cars.ts deleteCar (M3 Decision #6,
-        // implemented this dispatch). Sharees cannot delete. Reuses
-        // the parentCar() helper above so the rule shape matches the
-        // existing read/create gates.
-        allow delete: if request.auth != null
-                         && parentCar().ownerUid == request.auth.uid;
+        // edit-delete-entries dispatch 2026-05-29: extended from
+        // M4's owner-only (cascade) rule to owner-or-current-read-
+        // access-logger. The owner branch still satisfies the M4
+        // cascade in src/cars/cars.ts deleteCar.
+        allow delete: if canMutate();
       }
     }
 

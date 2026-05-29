@@ -214,9 +214,16 @@ revisit if shares-per-car pushes into the tens.
 | `odometer` | integer | yes | miles |
 | `gallons` | number | yes | float |
 | `cost` | number | yes | float; USD assumed in v0; field is unitless |
-| `loggedAt` | timestamp | yes | server-set on submit; not user-editable in v0 |
+| `loggedAt` | timestamp | yes | server-set on submit; not user-editable |
 
-Lifecycle: append-only in v0 (no edit, no delete; deferred to Soon).
+Lifecycle (amended 2026-05-29, edit-delete-entries dispatch): the
+three numeric fields (`odometer`, `gallons`, `cost`) are editable and
+an entry can be deleted, from the per-car entries table. Edit is a
+destructive overwrite — no audit trail / edit history. `loggedAt`
+remains server-set and **not** user-editable (preserves MPG-ordering
+integrity and the AGENTS "loggedAt always serverTimestamp" guardrail);
+date-editing is a deferred follow-up if demand surfaces. The original
+v0 stance was append-only (no edit, no delete; deferred to Soon).
 
 ### 5.4 Allowlist (`allowlist/{email}`)
 
@@ -281,8 +288,8 @@ brief, not a PRD-level concern.
 |---|---|---|
 | read | parent Car readers | inherit from Car read rule |
 | create | parent Car readers | `canRead(parentCar) && request.resource.data.loggedByUid == request.auth.uid` |
-| update | none in v0 | (deferred to Soon) |
-| delete | parent Car owner only (for cascade) | `request.auth != null && parentCar().ownerUid == request.auth.uid` |
+| update | parent Car owner OR original logger (with read access) | `canMutate() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['odometer','gallons','cost'])` — only the three numeric fields mutable; `loggedByUid`/`loggedAt` immutable |
+| delete | parent Car owner OR original logger (with read access) | `canMutate()` |
 
 **Note on the delete rule** (amended 2026-05-28 during M4): the
 original v1 PRD specified `delete = none in v0 (deferred to Soon)` on
@@ -292,11 +299,26 @@ because Firestore does not cascade and §6.2's `delete car` rule must
 have a code-level companion that removes the entries subcollection
 first. That companion (`src/cars/cars.ts` `deleteCar` →
 `deleteEntriesForCar` → `deleteDoc(car)`) needs the entries delete
-rule to be open to the *parent car owner* — sharees still cannot
-delete entries, and individual-entry edit/delete by any user remains
-a post-v0 BACKLOG → Soon item ("Edit / delete entries"). The rule
-reuses the `parentCar()` helper already in scope inside the entries
-`match` block so its shape matches the existing read/create gates.
+rule to be open to the *parent car owner*. At M4 time, sharees could
+not delete entries, and individual-entry edit/delete by any user was
+still a post-v0 BACKLOG → Soon item. The rule reused the
+`parentCar()` helper already in scope inside the entries `match`
+block so its shape matched the existing read/create gates.
+
+**Follow-on (amended 2026-05-29, edit-delete-entries dispatch):** the
+"Edit / delete entries" item shipped. The entries `update` rule moved
+from `if false` to owner-or-logger with a
+`hasOnly(['odometer','gallons','cost'])` field restriction, and the
+`delete` rule broadened from owner-only to owner-or-logger. The
+shared `canMutate()` helper — defined alongside `parentCar()` /
+`canReadParent()` in the entries `match` block — encodes the access
+model: the **parent-car owner may edit/delete any entry**, and the
+**original logger may edit/delete their own** entry while they still
+have read access (`canReadParent()` closes the unshared-former-sharee
+hole). Edit is a destructive overwrite (no audit trail); `loggedByUid`
+and `loggedAt` are immutable on update (the `hasOnly` guard). This
+supersedes the "remains a post-v0 item" wording above — the prior
+paragraph is retained for the M4 cascade history.
 
 ### 6.4 Allowlist
 
@@ -571,13 +593,17 @@ Post-M5: v0 ships. BACKLOG.md takes over.
 
 ### 11.2 Open questions (not blocking v0)
 
-- **Edit semantics (Soon).** All entry fields (odometer, gallons,
-  cost, timestamp) are presumed editable when edit ships. Real
-  open questions: who can edit — only `loggedByUid`, or anyone
-  with car read access? Is there an audit trail / edit history,
-  or is edit a destructive overwrite? Resolve in the "edit
-  entries" dispatch's design conversation before promoting from
-  Soon → Next.
+- **Edit semantics — RESOLVED (2026-05-29, edit-delete-entries
+  dispatch).** Who can edit: the **parent-car owner** (any entry on
+  their car) **or the original logger** (`loggedByUid`), the latter
+  only while they retain car read access. Edit is a **destructive
+  overwrite — no audit trail / edit history** (YAGNI at family
+  scale). Only the three numeric fields (`odometer`, `gallons`,
+  `cost`) are editable; **`loggedAt` is not user-editable** in this
+  pass (stays server-set; date-editing deferred as a follow-up if
+  demand surfaces, since it would need a date picker, MPG re-pairing
+  on reorder, and an AGENTS/PRD guardrail amendment). See §5.3
+  lifecycle and §6.3 for the shipped rules.
 - **Optional note field.** If M4's implementer finds free vertical
   room on the target device, an optional `note` string can sneak in
   without violating the single-screen rule. Otherwise skip; revisit

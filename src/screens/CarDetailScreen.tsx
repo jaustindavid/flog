@@ -23,6 +23,8 @@ import { SharedWithList } from '../components/SharedWithList';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MpgTile } from '../components/MpgTile';
 import { EntriesTable } from '../components/EntriesTable';
+import { EditEntryModal } from '../components/EditEntryModal';
+import type { Entry } from '../entries/entries';
 
 export function CarDetailScreen() {
   const { carId } = useParams<{ carId: string }>();
@@ -33,6 +35,7 @@ export function CarDetailScreen() {
     carId ?? ''
   );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editing, setEditing] = useState<Entry | null>(null);
 
   if (state.status === 'loading') {
     return (
@@ -129,7 +132,13 @@ export function CarDetailScreen() {
                 subtitleWhenEmpty="need 2+ fills"
               />
             </div>
-            <EntriesTable entries={entriesState.entries} />
+            <EntriesTable
+              entries={entriesState.entries}
+              canEditEntry={(e) =>
+                isOwner || e.loggedByUid === user?.uid
+              }
+              onEditEntry={(e) => setEditing(e)}
+            />
           </>
         )}
       </section>
@@ -144,6 +153,22 @@ export function CarDetailScreen() {
             Delete car
           </button>
         </section>
+      )}
+
+      {editing && (
+        <EditEntryModal
+          carId={carId ?? ''}
+          entry={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void refreshEntries();
+          }}
+          onDeleted={() => {
+            setEditing(null);
+            void refreshEntries();
+          }}
+        />
       )}
 
       {confirmingDelete && (

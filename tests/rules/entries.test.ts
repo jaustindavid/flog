@@ -196,7 +196,133 @@ describe('cars/{carId}/entries/{entryId} rules — PRD §6.3', () => {
     );
   });
 
-  it('owner cannot update an entry', async () => {
+  // edit-delete-entries dispatch 2026-05-29: entries `update`
+  // relaxed from `if false` to canMutate() + hasOnly(['odometer',
+  // 'gallons','cost']). Positive cases write the full three-field
+  // object — exactly what updateEntry() sends — not a single key.
+
+  it('owner can update an entry (writes the three fields)', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertSucceeds(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+      })
+    );
+  });
+
+  it('owner can update an entry logged by a sharee', async () => {
+    // Owner may edit ANY entry on their car, not just their own.
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [BOB_EMAIL],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: BOB_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertSucceeds(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+      })
+    );
+  });
+
+  it('logger-sharee can update their own entry (writes three)', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [BOB_EMAIL],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: BOB_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(bobAuth.uid, {
+      email: bobAuth.email,
+    });
+    await assertSucceeds(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+      })
+    );
+  });
+
+  it('sharee cannot update another user’s entry', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [BOB_EMAIL],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(bobAuth.uid, {
+      email: bobAuth.email,
+    });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+      })
+    );
+  });
+
+  it('outsider cannot update an entry', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(outsiderAuth.uid, {
+      email: outsiderAuth.email,
+    });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+      })
+    );
+  });
+
+  it('update that also changes loggedByUid is denied (hasOnly)', async () => {
     await seedCar('car-1', {
       name: 'Minivan',
       ownerUid: ALICE_UID,
@@ -213,6 +339,60 @@ describe('cars/{carId}/entries/{entryId} rules — PRD §6.3', () => {
     });
     await assertFails(
       updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+        loggedByUid: BOB_UID,
+      })
+    );
+  });
+
+  it('update that also changes loggedAt is denied (hasOnly)', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        odometer: 150,
+        gallons: 11,
+        cost: 33,
+        loggedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('rule-property: a single-key {cost} update succeeds (hasOnly subset)', async () => {
+    // This documents the rule-level property that hasOnly() permits a
+    // SUBSET of the three fields. The app never exercises this path —
+    // updateEntry() always writes all three. Kept as a rule-semantics
+    // guard, not a model of app behavior.
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertSucceeds(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
         cost: 99,
       })
     );
@@ -221,8 +401,8 @@ describe('cars/{carId}/entries/{entryId} rules — PRD §6.3', () => {
   it('owner can delete an entry', async () => {
     // M4: parent-car owner gets delete via the relaxed rule, so the
     // cascade in src/cars/cars.ts deleteCar can clean up entries
-    // before deleting the Car doc. Sharees still cannot delete (see
-    // the next test).
+    // before deleting the Car doc. edit-delete-entries dispatch keeps
+    // this green under the broader canMutate() rule (owner branch).
     await seedCar('car-1', {
       name: 'Minivan',
       ownerUid: ALICE_UID,
@@ -242,7 +422,31 @@ describe('cars/{carId}/entries/{entryId} rules — PRD §6.3', () => {
     );
   });
 
-  it('sharee cannot delete an entry', async () => {
+  it('logger-sharee can delete their own entry', async () => {
+    // edit-delete-entries dispatch 2026-05-29: a sharee with current
+    // read access may delete an entry they logged.
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [BOB_EMAIL],
+    });
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: BOB_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+    });
+    const ctx = env.authenticatedContext(bobAuth.uid, {
+      email: bobAuth.email,
+    });
+    await assertSucceeds(
+      deleteDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'))
+    );
+  });
+
+  it('sharee cannot delete another user’s entry', async () => {
+    // Entry logged by the owner (ALICE); the sharee (BOB) cannot
+    // delete it — canMutate()'s logger branch checks loggedByUid.
     await seedCar('car-1', {
       name: 'Minivan',
       ownerUid: ALICE_UID,
