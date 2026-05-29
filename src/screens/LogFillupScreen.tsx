@@ -27,6 +27,12 @@ import {
   lastFillMpg,
   lifetimeMpg,
 } from '../entries/computeMpg';
+import {
+  expectedRangeBand,
+  largestFill,
+  longestTank,
+  p95Mpg,
+} from '../entries/computeStats';
 import { useEntries } from '../entries/useEntries';
 import { validateCost } from '../entries/validateCost';
 import { validateGallons } from '../entries/validateGallons';
@@ -35,6 +41,7 @@ import { getMruCarId, setMruCarId } from '../lib/mru';
 import { CarPickerChips } from '../components/CarPickerChips';
 import { MpgTile } from '../components/MpgTile';
 import { NumericField } from '../components/NumericField';
+import { StatRow } from '../components/StatRow';
 import { Toast, type ToastState } from '../components/Toast';
 
 export function LogFillupScreen() {
@@ -246,11 +253,14 @@ export function LogFillupScreen() {
           access below; an extracted const loses the narrowing. Row
           hides entirely until the selected car has ≥1 entry — brand-
           new cars don't show three "—" placeholders (Decision #6).
-          `key={selectedCarId}` remounts on car switch, firing the
-          150ms `animate-fade-in` keyframe (defined in src/index.css). */}
+          `key={`mpg-${selectedCarId}`}` remounts on car switch, firing
+          the 150ms `animate-fade-in` keyframe (src/index.css). The key
+          is namespaced (`mpg-`) so it cannot collide with the stats
+          section's key below — two siblings sharing a bare key made
+          React interleave the sections mid-transition. */}
       {entriesState.status === 'ready' && entriesState.entries.length >= 1 && (
         <section
-          key={selectedCarId}
+          key={`mpg-${selectedCarId}`}
           className="border-t border-gray-200 pt-5 animate-fade-in"
         >
           <div className="grid grid-cols-3 gap-2">
@@ -272,6 +282,52 @@ export function LogFillupScreen() {
           </div>
         </section>
       )}
+
+      {/* Per-car stats section — below the MPG tiles; own keyed wrapper
+          (`stats-${id}`, distinct from the tiles' `mpg-${id}`) so the
+          car-switch fade fires independently without colliding keys.
+          Same gate: ready && ≥1 entry. TS narrowing to `.entries` holds
+          inside this branch. */}
+      {entriesState.status === 'ready' && entriesState.entries.length >= 1 && (() => {
+        const entries = entriesState.entries;
+        const range = expectedRangeBand(entries);
+        const p95 = p95Mpg(entries);
+        const tank = longestTank(entries);
+        const fill = largestFill(entries);
+
+        // Format helpers — explicitly typed so TS/lint cannot infer any.
+        const fmtRange = (r: { lowMi: number; highMi: number } | null) =>
+          r === null ? null
+          : r.lowMi === r.highMi ? `${r.lowMi} mi`
+          : `${r.lowMi}–${r.highMi} mi`;          // U+2013 en dash
+        const fmtMpg = (v: number | null) =>
+          v === null ? null : `${v.toFixed(1)} mpg`;
+        const fmtMi = (v: number | null) =>
+          v === null ? null : `${Math.round(v)} mi`;
+        const fmtGal = (v: number | null) =>
+          v === null ? null : `${v.toFixed(2)} gal`;
+
+        return (
+          <section
+            key={`stats-${selectedCarId}`}
+            className="flex flex-col gap-1 animate-fade-in"
+          >
+            <StatRow
+              label="Expected range"
+              display={fmtRange(range)}
+              emphasis
+              subtitleWhenEmpty="need 5+ fills"
+            />
+            <StatRow
+              label="P95 MPG"
+              display={fmtMpg(p95)}
+              subtitleWhenEmpty="need 5+ fills"
+            />
+            <StatRow label="Longest tank" display={fmtMi(tank)} />
+            <StatRow label="Largest fill" display={fmtGal(fill)} />
+          </section>
+        );
+      })()}
     </main>
   );
 }

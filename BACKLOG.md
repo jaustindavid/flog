@@ -143,6 +143,23 @@ validate demand, or genuine future-phase structural work.
 - `[ ]` **Per-car insight tiles** — S. Max-ever-fuel, best-MPG,
   worst-MPG, longest interval between fills, average cost/mile.
   Computed client-side from the fetched entries. v2-ish.
+- `[ ]` **"Longest tank" outlier from data gaps** — S. Bug, filed
+  2026-05-29 after the log-screen-stats ship. A missed/forgotten
+  fill-up makes one odometer delta span *two* tanks, so "Longest
+  tank" reads ~2× typical: Rocket shows 479 mi, Rockette 494 mi —
+  each conveniently ~double the real max. The math is correct; the
+  input has a hole. These are physically-impossible single tanks and
+  should be detectable as such: a real tank can't exceed
+  `largestFill (gal) × bestPlausibleMpg` — so a delta implying an
+  MPG above a plausibility ceiling (e.g. the pair's `delta/gallons`
+  exceeding P95 MPG, or a fixed sanity cap) is a gap, not a tank.
+  Same outlier the P95/percentile stats already sidestep on the MPG
+  side. Light followup: **exclude** implausible deltas in
+  `longestTank` (owner decided 2026-05-29 — silently skip the bad
+  delta so it shows the true ~240 mi, matching how the MPG stats
+  already drop the gap pair; not flag/surface), with a unit test
+  using the Rocket/Rockette gap shape. NOT urgent — the stat is
+  "fun/vanity," not pump-critical.
 - `[ ]` **Trends over time** — M. Charts for MPG-over-time,
   cost-over-time, gallons-over-time per car. Needs a charting
   library (chart.js or similar; pick during dispatch).
