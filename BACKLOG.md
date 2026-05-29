@@ -83,14 +83,6 @@ Likely to come up in the first weeks post-v0, in roughly this order
   create rule). Trigger: a family member asks for it, OR M5's per-
   car entries view makes us want fill-up context for outliers.
 
-- `[ ]` **Edit / delete entries** — S/M. Owner explicitly named this
-  during PRD interview as the first post-v0 capability. Open
-  questions to resolve before promoting to Next: who can edit (only
-  `loggedByUid`, or anyone with car read access)? Is there an edit
-  history / audit trail, or is edit a destructive overwrite? All
-  four entry fields (odometer, gallons, cost, timestamp) are
-  presumed editable. See PRD §11.2.
-
 - `[ ]` **Refactor data-fetch hooks to a subscribe-style abstraction**
   — S. Promoted from Later → Soon at M4 closure (2026-05-28).
   Trigger met: `useCars`, `useCar`, and (after M5) `useEntries`
@@ -345,8 +337,17 @@ validate demand, or genuine future-phase structural work.
 
 ## Done
 
-(empty — populate as items ship; each Done entry gets a substantive
-summary line so future readers can understand what landed and when)
+- `[x]` **Edit / delete entries** — shipped to `flog-dev`
+  2026-05-29 (dispatch `edit-delete-entries`), owner-verified on a
+  Pixel. Resolved the PRD §11.2 open questions: owner edits any
+  entry on their car, a sharee edits/deletes only entries they
+  logged (`canMutate()` in `firestore.rules`); destructive
+  overwrite (no audit trail); `loggedAt` NOT editable (only
+  odometer/gallons/cost, enforced by `hasOnly` field-immutability
+  in the rule). Tap-row-to-edit modal (`EditEntryModal`); delete
+  via `ConfirmDialog`. 53 rules tests (all 9 access cases). A V2
+  fix-forward corrected gallons precision (was truncating 5.001→
+  5.00 on edit). See `dispatch/edit-delete-entries-handoff.md`.
 
 ---
 
