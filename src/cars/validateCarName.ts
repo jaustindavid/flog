@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Pure validation helper for Car names. Trims whitespace, blocks
 // empty / over-long. Soft 100-char cap per dispatch §3 ("implementer
 // picks; ~100 char default is fine").

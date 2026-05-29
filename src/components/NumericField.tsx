@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // NumericField — labeled numeric input with appropriate mobile keypad.
 //
 // `decimal=false` → integer keypad (odometer); `inputmode="numeric"` +

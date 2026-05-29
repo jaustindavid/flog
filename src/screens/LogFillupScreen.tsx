@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // LogFillupScreen — landing page (`/`) per M4 dispatch §3 + Decision #1.
 //
 // Family workflow: open app → see a form pre-selected to the car you

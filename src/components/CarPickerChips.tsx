@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // CarPickerChips — horizontal chip row for the log form's car picker.
 // At family scale (4-5 cars) all chips fit on a 375px viewport with
 // 44pt tap targets (Decision #9). Selected chip is filled-blue;

@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // SharedWithList — renders Car.shareeEmails. When canUnshare is true
 // (owner view), each row shows a Remove button that fires
 // unshareCar + parent refresh.

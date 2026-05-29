@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Pure validation helper for gallons input. Strictly positive number.
 //
 // Zero is rejected: a fill-up of 0 gallons is a data error, not a

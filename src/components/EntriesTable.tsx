@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // EntriesTable — chronological list of fill-ups on a car. Newest
 // first. Per-row MPG computed from each entry paired against the
 // entry chronologically prior (i.e., entries[i+1] in newest-first

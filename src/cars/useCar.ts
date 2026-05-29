@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // useCar — single-car-detail hook. Same epoch-guarded shape as
 // useCars (AC C9): both success and error paths discard stale
 // resolutions.

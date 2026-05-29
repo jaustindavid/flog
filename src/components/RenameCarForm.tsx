@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // RenameCarForm — inline edit (chosen over modal: rename is a single
 // field, low-stakes, and the inline form keeps the user's place on
 // the car detail screen). Toggles between display name + "Rename"

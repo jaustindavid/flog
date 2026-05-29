@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Cars module — single boundary between screens/hooks and Firestore
 // for the Car doc shape (PRD §5.2).
 //

@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // AuthProvider — React Context wrapping the auth state machine.
 //
 // State machine (see dispatch/M2-auth-allowlist.md §7.1):

@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Most-recently-used car ID — stored in localStorage per device.
 //
 // Per dispatch Decision #2: family is overwhelmingly single-device-

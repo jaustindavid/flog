@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Shared helpers for Firestore rules tests.
 //
 // Uses @firebase/rules-unit-testing against the Firestore emulator.

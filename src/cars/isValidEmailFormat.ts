@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Pure email-format sanity check. Not RFC-compliant; intent is to
 // catch typos (missing @, missing domain, spaces). Run AFTER
 // canonicalEmail() — canonicalization trims + lowercases, so this

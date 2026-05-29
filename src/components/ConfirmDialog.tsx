@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // ConfirmDialog — generic confirm/cancel. Same accessibility floor
 // as AddCarModal: autofocus the confirm button, Esc-to-close, explicit
 // Cancel button. Used by delete-car.

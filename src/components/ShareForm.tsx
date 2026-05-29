@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // ShareForm — owner-only. Adds a sharee by email. Pre-write UI
 // guardrails per dispatch §3:
 //   - empty → "Enter an email"

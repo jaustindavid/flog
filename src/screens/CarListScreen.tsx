@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // CarListScreen — replaces M2's EmptyHomeScreen.
 // Renders cars-list-or-empty-state with a persistent Add car button.
 

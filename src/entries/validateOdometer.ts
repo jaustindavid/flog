@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Pure validation helper for odometer input. Integer miles ≥ 0.
 //
 // Soft posture per dispatch §3 + Decision #8: hard-block only on

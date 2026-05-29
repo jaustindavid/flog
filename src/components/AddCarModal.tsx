@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // AddCarModal — minimal accessibility floor per dispatch §8 U3:
 // autofocus primary input, Esc-to-close, explicit Cancel button.
 // Focus-trap + full ARIA roles are deferred (BACKLOG → Later if

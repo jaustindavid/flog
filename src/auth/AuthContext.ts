@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 import { createContext } from 'react';
 import type { User } from 'firebase/auth';
 

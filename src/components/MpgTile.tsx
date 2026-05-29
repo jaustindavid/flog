@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // MpgTile — one of the three MPG summary tiles at the top of the
 // Fill-ups section on CarDetailScreen.
 //

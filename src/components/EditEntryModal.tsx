@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // EditEntryModal — edit or delete a single fill-up. Mirrors
 // AddCarModal's accessibility floor (overlay + centered panel,
 // autofocus the first field, Esc-to-close, explicit Cancel,

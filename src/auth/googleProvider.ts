@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 import { GoogleAuthProvider } from 'firebase/auth';
 
 // prompt=select_account forces Google to always show the account chooser,

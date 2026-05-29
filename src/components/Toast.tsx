@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Minimal toast notifier — fixed-position banner near the bottom of
 // the viewport with success / warning / error variants. Auto-dismiss
 // after 4 seconds; manual dismiss via tap.

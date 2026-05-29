@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Entries module — single boundary between screens/hooks and Firestore
 // for the Entry doc shape (PRD §5.3).
 //

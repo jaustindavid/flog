@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Header — persistent across all signed-in routes.
 //
 // M4 adds the Log / Cars nav between the wordmark and the sign-out

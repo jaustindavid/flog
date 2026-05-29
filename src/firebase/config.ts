@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Firebase config — values come from env vars (per env mode at build time).
 // See `.env.development` and `.env.production`; values themselves originate
 // from `dispatch/M1-g-outputs.md` (gitignored).

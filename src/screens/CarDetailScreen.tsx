@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // CarDetailScreen — name, sharees, fill-ups + MPG, and owner
 // controls.
 //

@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // MPG computation — pure helpers. No Firestore, no React; importable
 // from any context. Tested in computeMpg.test.ts per AGENTS gate
 // ("MPG computation: (odo_now - odo_prev) / gallons_now, handling

@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 import { describe, expect, it } from 'vitest';
 import { validateGallons } from './validateGallons';
 

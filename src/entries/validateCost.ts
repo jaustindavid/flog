@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Pure validation helper for cost input. Non-negative number; zero
 // allowed (free fill-ups exist: promo days, employee fuel).
 //

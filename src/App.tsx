@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // App — top-level state-machine switch. The signed-in branch mounts
 // the Header + routed surface. M4 restructured: `/` is the log form,
 // `/cars` is the car list, `/cars/:carId` is the per-car detail.

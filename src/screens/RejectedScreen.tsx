@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 import { useAuth } from '../auth/useAuth';
 
 interface RejectedScreenProps {

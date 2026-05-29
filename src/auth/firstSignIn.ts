@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // First-sign-in logic. Reads users/{uid}; if absent, attempts to create
 // with the four PRD §5.1 fields. permission-denied means the user is
 // not allowlisted (rules carve-out + allowlist gate per PRD §6.1).

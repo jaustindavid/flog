@@ -1,3 +1,5 @@
+// flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
+
 // Boundary normalization for email addresses.
 //
 // Used wherever an email enters the system from user input or
