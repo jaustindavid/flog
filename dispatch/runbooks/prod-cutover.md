@@ -102,6 +102,48 @@ Confirm `https://flog-prod-497401.web.app` serves the app.
 
 ---
 
+## 2.5 (optional) Custom domain — done at the 2026-05-29 cutover
+
+flog launched on **`flog.austindavid.com`**, not the `web.app`
+URL. If you're doing the same, here's the recipe (and the rakes we
+hit). It can run in parallel with onboarding/import on `web.app` —
+the cert provisioning takes time, so kick it off early and finish
+the auth-config flip once the cert is live.
+
+1. **Firebase console → Hosting → flog-prod → Add custom domain** →
+   `flog.austindavid.com` → verify ownership (TXT) → add the A
+   records Firebase gives you.
+2. **Cloudflare: set those records to "DNS only" (grey cloud), NOT
+   proxied (orange).** Proxied = Cloudflare serves its own cert and
+   Firebase can't provision → stuck on "pending" forever. Grey-cloud
+   keeps Cloudflare out of the TLS path so Firebase's Let's Encrypt
+   cert provisions directly. (~minutes to ~24h; usually fast.)
+3. Once the domain shows **"connected"** (cert live), flip auth:
+   - `.env.production` → `VITE_FIREBASE_AUTH_DOMAIN=flog.austindavid.com`
+     — **THE load-bearing step.** If the SPA serves from the custom
+     domain but authDomain stays `…web.app`, sign-in loops (the M2
+     Chrome storage-partition rake, cross-origin auth iframe).
+   - **`npm run deploy:prod`** again (authDomain is build-time).
+   - **OAuth client**: add JS origin `https://flog.austindavid.com`
+     and redirect URI
+     `https://flog.austindavid.com/__/auth/handler` (exact — a typo
+     here yields Google "Access blocked: this app's request is
+     invalid" = `redirect_uri_mismatch`). Allow ~5 min to propagate.
+   - **OAuth consent → Authorized domains**: add `austindavid.com`
+     (the registrable apex, not the `flog.` subdomain).
+   - **Firebase Auth → Authorized domains**: add
+     `flog.austindavid.com`.
+4. Test sign-in at `https://flog.austindavid.com` (fresh sign-in;
+   new origin). **The `…web.app` URL's sign-in now loops** by
+   design (its SPA points at the custom-domain authDomain) — the
+   custom domain is canonical; have the family use it.
+
+NOTE: a **logo upload** to the OAuth consent screen triggers Google
+brand verification — we did NOT do that (flog's icon is in-app/PWA
+only). A custom domain alone in Testing mode does not trigger it.
+
+---
+
 ## 3. Verify prod auth config (GCP/Firebase console)
 
 These were set during prod's env setup, but verify before onboarding
@@ -117,6 +159,26 @@ These were set during prod's env setup, but verify before onboarding
   `flog-prod-497401.web.app`.
 
 (Full details + the UI paths in `gcp-firebase-env-setup.md` §5.)
+
+### Publishing status: Testing vs Production
+
+flog launched in **Testing**, then flipped to **Production**
+2026-05-29. Either is fine; the trade:
+
+- flog uses only **basic scopes** (email/profile/openid) and has
+  **NO consent-screen logo**, so **publishing to Production is
+  instant — no verification cycle.** (Brand verification is
+  triggered by uploading a logo, which we deliberately don't.
+  **Do not upload a consent-screen logo** unless you want to opt
+  into verification.)
+- **Production** drops the test-users-list requirement (flog's own
+  allowlist is the real gate) and lifts the 100-user cap.
+- **Login persistence is NOT a reason to flip.** Firebase Auth
+  keeps its own session (IndexedDB), independent of the Google
+  OAuth 7-day refresh-token expiry — sessions persist for
+  weeks/months in *both* modes (flog only uses Google for the
+  initial handshake). If users get logged out, look at storage
+  eviction / explicit sign-out, not the OAuth publishing status.
 
 ---
 

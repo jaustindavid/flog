@@ -183,11 +183,6 @@ validate demand, or genuine future-phase structural work.
 
 ### Product surface / ops
 
-- `[ ]` **Custom domain** — S (mostly ops). Move prod from
-  `flog-prod.web.app` to a real domain. Includes Cloudflare DNS,
-  Firebase Hosting domain mapping, OAuth authorized-domains
-  updates. The Route7 nautilus has rake-stepped this exact recipe;
-  consult before drafting.
 - `[ ]` **Logo + favicon + basic branding** — XS to S. Triggers
   Google OAuth brand verification (per Route7 rake), so don't
   ship casually. Probably pairs with custom domain.
@@ -316,6 +311,25 @@ validate demand, or genuine future-phase structural work.
 ---
 
 ## Done
+
+- `[x]` **Custom domain** — done 2026-05-29 as part of the prod
+  cutover (pulled forward from Later on the day). `flog-prod` now
+  serves at **`https://flog.austindavid.com`** (Firebase Hosting
+  custom domain; Cloudflare DNS set grey-cloud / DNS-only so
+  Firebase could provision the Let's Encrypt cert). Required the
+  authDomain flip (`.env.production` →
+  `flog.austindavid.com`) + rebuild, plus OAuth client redirect
+  URI / JS origin, OAuth-consent authorized domain `austindavid.com`,
+  and Firebase-Auth authorized domain. The full recipe + rakes
+  (grey-cloud, authDomain-must-move, redirect_uri_mismatch) are
+  folded into `dispatch/runbooks/prod-cutover.md`. The old
+  `…web.app` URL still resolves but its sign-in now loops (SPA
+  points at the custom-domain authDomain) — custom domain is
+  canonical. NOTE: a logo upload would trigger Google OAuth brand
+  verification — not done; flog has no uploaded logo on the
+  consent screen (the icon is in-app/PWA only). Pairs with the
+  still-open "Logo + branding" + "Privacy page" items if you ever
+  open signup past trusted invitees.
 
 - `[x]` **CSV import of existing data** — met 2026-05-29, **not as
   the user-facing feature originally imagined.** The real need was a
