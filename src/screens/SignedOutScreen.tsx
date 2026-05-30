@@ -1,5 +1,6 @@
 // flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
 
+import { Link } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 
 export function SignedOutScreen() {
@@ -17,6 +18,20 @@ export function SignedOutScreen() {
       >
         Sign in with Google
       </button>
+      <nav className="flex gap-4 text-sm text-gray-500">
+        <Link
+          to="/tos"
+          className="hover:text-gray-700 hover:underline underline-offset-2"
+        >
+          Terms
+        </Link>
+        <Link
+          to="/privacy"
+          className="hover:text-gray-700 hover:underline underline-offset-2"
+        >
+          Privacy
+        </Link>
+      </nav>
     </div>
   );
 }

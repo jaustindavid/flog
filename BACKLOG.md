@@ -209,11 +209,40 @@ validate demand, or genuine future-phase structural work.
 
 ### Account / data ownership
 
-- `[ ]` **Account deletion** — M. Committed in PRD §1.4. Purges
-  the User doc, all Entries you authored, and removes you from
-  every Car's `shareeEmails`. Cars you own become an open question:
-  delete cascade vs transfer ownership vs orphan. Resolve in the
-  design conversation.
+- `[ ]` **Self-serve account deletion + data export** — M.
+  Committed in PRD §1.4. Removes you from every Car's
+  `shareeEmails`; cars/entries handled per the ownership model
+  below. Export produces a JSON copy of your profile + entries
+  (mirrors Route7's "Download my data").
+  - **Ownership + deletion model (decided 2026-05-29).** Cars are
+    owned by their creating user; mileage records are owned by the
+    car (transitively by the car-owner). On user deletion:
+    1. **Cars the user OWNS are deleted**, cascading all their
+       entries — including entries other users logged on those cars
+       (the car going takes its records with it).
+    2. **The user's contributions to cars they DON'T own are
+       ANONYMIZED, not deleted** — keep the entry, strip the
+       `loggedByUid` attribution (replace with a "former user"
+       sentinel / null). Rationale: the record belongs to the
+       car-owner, and deleting it would gouge a hole in that car's
+       mileage history — exactly the missing-fill gap that breaks
+       the odometer chain and corrupts MPG/P95/expected-range stats
+       (see the data-gap work, 2026-05-29). Anonymizing severs the
+       personal link while keeping the chain intact.
+    - Impl note: anonymize = sentinel/null `loggedByUid` so there's
+      no dangling user-doc reference; entries stay readable by the
+      car's sharees under the existing rules.
+  - **Legal text already aligned (2026-05-29).** The Terms "Your
+    data" section and Privacy `#data-controls` were reworded to
+    state this model: Terms establishes car-owner ownership of
+    entries; Privacy spells out the delete-owned / anonymize-
+    contributed split. So the pages describe the intended behavior
+    already — building the feature just makes the app *do* what the
+    pages say (today it's manual by email).
+  - **Interim**: the Privacy policy (added 2026-05-29) promises both
+    deletion and a data copy **by emailing `flog@austindavid.com`**
+    — manual today. Building these as in-app buttons retires that
+    manual promise; until then, honor email requests by hand.
 - `[ ]` **User-admin / blacklist UI** — M. Explicit revocation of
   app access — beyond the un-share-leaves-allowlist default
   established in PRD §5.4. Bootstrap admin can remove an email
@@ -227,11 +256,17 @@ validate demand, or genuine future-phase structural work.
 - `[ ]` **Logo + favicon + basic branding** — XS to S. Triggers
   Google OAuth brand verification (per Route7 rake), so don't
   ship casually. Probably pairs with custom domain.
-- `[ ]` **Privacy page** — XS. Needed before opening signup beyond
-  family / trusted invitees. Static markdown page; PRD §13 is most
-  of the content.
 - `[ ]` **Dark mode** — XS to S. Tailwind makes this cheap. Earn
   it via "I'd actually use this on a phone at night at the pump."
+  **Latent issue found 2026-05-29**: flog sets NO explicit page
+  background — `body`/`html`/`#root` are all transparent, so the
+  canvas inherits the OS default. In light mode that's white and
+  flog's gray text reads fine (how the family sees it today); in
+  **dark mode the canvas goes dark and the gray text turns
+  low-contrast** across the whole app. The new legal pages work
+  around it locally with their own `min-h-screen bg-white` wrapper,
+  but the real fix is a global background decision (force light, or
+  do proper dark-mode tokens). Worth folding into this item.
 
 ### Auth / identity
 
@@ -353,6 +388,27 @@ validate demand, or genuine future-phase structural work.
 
 ## Done
 
+- `[x]` **Terms of Service + Privacy pages** — done 2026-05-29.
+  Google flagged that meaningful ToS/Privacy matter once flog
+  published its OAuth consent screen. Adapted from the sibling
+  Route7 pages, retailored to flog's real behavior:
+  `src/screens/TermsScreen.tsx` + `PrivacyScreen.tsx` at public
+  routes `/tos` + `/privacy`. Decisions: South Carolina governing
+  law; 16+ (mirrors Route7); private non-commercial app under
+  PolyForm-NC; no maps/location; account deletion + data export are
+  **manual by email** today (see the self-serve backlog item).
+  Privacy claims are grounded in actual source (user doc =
+  {uid, email, displayName, createdAt} — no photo; MRU car in
+  localStorage; Firebase + Cloudflare-DNS sub-processors; no
+  analytics/ads/location). Routing: lifted the two routes ABOVE
+  flog's global auth switch in `App.tsx` (signed-out visitors +
+  Google's review must reach them) — verified in-browser that
+  `/tos` + `/privacy` render signed-out while `/` still gates to
+  the sign-in screen. Footer links added to `SignedOutScreen`.
+  Pages set their own `min-h-screen bg-white` (dark-mode contrast
+  workaround — see Dark mode item). **Owner follow-ups before this
+  is fully live**: V2 the wording; add the two URLs to the OAuth
+  consent screen; deploy to prod.
 - `[x]` **"Longest tank" outlier from data gaps** — done 2026-05-29
   (same day it was filed). A missed/under-recorded fill made one
   odometer delta span two tanks, so "Longest tank" read ~2× typical:
