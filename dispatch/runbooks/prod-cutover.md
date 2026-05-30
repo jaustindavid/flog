@@ -88,15 +88,17 @@ If dev looks right, prod is the same motions with prod values.
 ## 2. Deploy code + rules to prod
 
 ```sh
-npm run deploy:prod        # hosting + the built SPA
-npm run deploy:rules:prod  # Firestore security rules — DO NOT SKIP
+npm run deploy:prod        # hosting (built SPA) + Firestore rules
 ```
 
-**`deploy:rules:prod` is essential and easy to forget.** M4 (entries
-cascade-delete) and the edit-delete-entries dispatch both changed
-`firestore.rules`; prod must get them or edit/delete/cascade fail (or
-worse, the old rules allow the wrong thing). The hosting-only
-`deploy:prod` does NOT push rules.
+**`deploy:prod` now ships hosting AND rules in one command** (it runs
+`firebase deploy --only hosting,firestore:rules`), so the rules can no
+longer be forgotten — they were a frequent footgun (M4 cascade-delete,
+edit-delete-entries, and the 2026-05-29 P1 validation all changed
+`firestore.rules`; stale prod rules would fail edit/delete/cascade or,
+worse, allow the wrong thing). If you ever need them apart, the escape
+hatches are `npm run deploy:hosting:prod` (hosting only) and
+`npm run deploy:rules:prod` (rules only).
 
 Confirm `https://flog-prod-497401.web.app` serves the app.
 
@@ -275,8 +277,9 @@ On a Pixel against the prod URL:
 
 ## Known rakes (carried from prior dispatches)
 
-- **`deploy:rules:prod` is separate from `deploy:prod`** — forgetting
-  it ships hosting with stale rules. (§2.)
+- ~~**`deploy:rules:prod` is separate from `deploy:prod`**~~ — FIXED
+  2026-05-29: `deploy:prod`/`deploy:dev` now ship hosting + rules
+  together, so this rake is retired. (§2.)
 - **`authDomain` must be the `web.app` host, not `firebaseapp.com`**
   — Chrome storage partitioning breaks the cross-origin auth iframe
   otherwise (M2 V2). `.env.production` is already correct; the rake is

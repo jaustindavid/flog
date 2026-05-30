@@ -25,7 +25,9 @@ import {
   signOut as fbSignOut,
   type User,
 } from 'firebase/auth';
+import { clearIndexedDbPersistence, terminate } from 'firebase/firestore';
 import { auth } from '../firebase/auth';
+import { firestore } from '../firebase/firestore';
 import { googleProvider } from './googleProvider';
 import { ensureUserDoc } from './firstSignIn';
 import {
@@ -112,6 +114,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       signOut: async () => {
         await fbSignOut(auth);
         resolvingUidRef.current = null;
+        // Clear the offline Firestore cache so a shared device doesn't
+        // retain this user's car/entry data (IndexedDB persists past
+        // sign-out otherwise). Terminate the instance first, then clear,
+        // then reload to boot a fresh instance. Best-effort: clearing
+        // fails if another tab still holds the cache — benign, swallow
+        // it; the reload (in `finally`) always runs so the next user
+        // starts from a clean signed-out shell regardless.
+        try {
+          await terminate(firestore);
+          await clearIndexedDbPersistence(firestore);
+        } catch {
+          // Another tab open, or already cleared — nothing to do.
+        } finally {
+          window.location.reload();
+        }
       },
     }),
     [status, user]

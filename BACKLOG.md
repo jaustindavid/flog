@@ -284,6 +284,50 @@ validate demand, or genuine future-phase structural work.
   that gets linked to the invited email via a one-time handshake
   on first sign-in. Non-trivial; gated on "real users start
   asking for non-Google sign-in."
+- `[~]` **Harden email trust in rules (email_verified + admin-by-UID)**
+  — S. **Later, trigger-gated.** From the 2026-05-29 security review
+  (finding P3). Today the Firestore rules' admin carve-out and the
+  allowlist/sharee matching key off `request.auth.token.email`
+  without checking `email_verified`, and the admin is a hardcoded
+  email literal in `firestore.rules`. Two latent issues, both parked:
+  1. **Unverified-email trust** — safe under Google-only auth (Google
+     verifies the email), but becomes a real privilege-escalation hole
+     **the moment a second auth provider is enabled**: a provider that
+     doesn't verify email could present a token with an arbitrary
+     `email` claim and pass `allowed()` / the admin gate. **Gated on
+     exactly that trigger — do it together with "Multi-provider OAuth"
+     above.** Owner's read 2026-05-29: highly unlikely, hence Later.
+  2. **Admin-by-email-literal** — the admin matches one exact spelling,
+     so a Gmail dot/`+tag` alias sign-in would silently drop admin
+     powers. Owner is explicitly **not worried about this today** (he
+     controls his own sign-in); folded in so it lands alongside #1 if
+     this ever moves.
+  Fix when triggered: add an `email_verified == true` guard to every
+  email-based rule decision, and pin the admin to
+  `request.auth.uid == '<admin-uid>'` instead of the email literal.
+  Small rules change + rules-tests for unverified / case-variant /
+  aliased tokens. No app-code change.
+- `[ ]` **Tighten the allowlist / invite trust model** — M.
+  **Later, gated on multitenancy** (flog hosting more than one
+  independent private group — the "private multitenancy" the README
+  floats). From the 2026-05-29 security review (finding P5). Today the
+  `allowlist` is a single global collection and the rules let **any
+  allowlisted member create an allowlist doc for any email**
+  (`firestore.rules`) — so any one member can permanently grant
+  sign-in access to any outsider, no car-share required, and allowlist
+  docs are never reaped on unshare. **Acceptable by design at
+  single-family scale** (the household trusts each other; owner
+  ratified 2026-05-29). It breaks down under **multitenancy**: a
+  global, write-by-any-member allowlist has no tenant isolation, so a
+  member of one group could grant access in the shared namespace.
+  Trigger = "flog hosts a second unrelated group." Candidate fixes
+  (resolve in a design conversation when triggered): (a) restrict
+  `allowlist` create to an admin/owner role; (b) couple invites
+  transactionally to a car-share the caller owns (hard to enforce
+  atomically in rules); (c) per-tenant allowlist scoping so membership
+  is namespaced to a group, not global. Depends on the bigger
+  structural piece multitenancy needs anyway — there's currently no
+  "group"/"tenant" entity in the data model.
 
 ### Infra / DX
 
@@ -388,6 +432,43 @@ validate demand, or genuine future-phase structural work.
 
 ## Done
 
+- `[x]` **Security hardening — rules validation, HTTP headers,
+  offline-cache clear (review P1/P2/P4)** — done 2026-05-29 from the
+  comprehensive security review.
+  - **P1 — rules validate shape, not just authorization.** Added
+    `hasOnly` field-pinning + type/range checks + server-timestamp
+    pinning (`createdAt`/`loggedAt == request.time`) to the user/car/
+    entry create rules and the car/entry update rules
+    (`firestore.rules`). Closes the forged-`loggedAt` hole (highest
+    impact — it reorders entries and silently corrupts every reader's
+    MPG/stats), forged `createdAt`, extra/garbage fields, non-list
+    `shareeEmails`. +12 rules tests (65 total, all green). Inert until
+    deployed — and as of the 2026-05-29 deploy-script refactor,
+    `deploy:prod`/`deploy:dev` ship rules alongside hosting, so a
+    normal deploy covers it (no separate rules push needed).
+  - **P2 — security headers** in `firebase.json` hosting:
+    `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`
+    (clickjacking), `Referrer-Policy`, HSTS (1y, includeSubDomains, no
+    preload), `Permissions-Policy`, and an **enforcing** CSP. CSP was
+    initially Report-Only, then flipped to enforce 2026-05-29 per owner
+    (validating on dev hosting first). `frame-src` includes
+    `*.web.app` to cover the dev authDomain
+    (`flog-dev-497401.web.app`) auth iframe; prod's authDomain is the
+    custom domain (= `'self'`). **Validation path: `deploy:dev` → sign
+    in on the dev hosting URL → confirm sign-in works + no CSP
+    violations in the console → then `deploy:prod`.** If a violation
+    appears, the console report names the exact origin to add.
+  - **P4 — offline cache cleared on sign-out** (`AuthProvider`):
+    `terminate` + `clearIndexedDbPersistence` (best-effort) + reload,
+    so a shared family device doesn't retain the prior user's cached
+    car/entry data. Fixes the data-at-rest gap introduced by the
+    Firestore-persistence add earlier the same day. Ships on
+    `deploy:prod`.
+  - Same review: P3 + P5 deferred to Later (trigger-gated, see
+    Auth/identity). Low-priority cleanups NOT yet done — remove unused
+    `VITE_ADMIN_EMAIL`, gate prod `console.error` behind DEV, add an
+    import-script `--yes`/project-match confirmation, set a GCP budget
+    alert, `rm` the plaintext service-account keys from the repo root.
 - `[x]` **Terms of Service + Privacy pages** — done 2026-05-29.
   Google flagged that meaningful ToS/Privacy matter once flog
   published its OAuth consent screen. Adapted from the sibling

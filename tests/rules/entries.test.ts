@@ -12,6 +12,7 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, it } from 'vitest';
 import {
@@ -485,6 +486,101 @@ describe('cars/{carId}/entries/{entryId} rules — PRD §6.3', () => {
     });
     await assertFails(
       deleteDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'))
+    );
+  });
+});
+
+describe('entries — field/shape validation (P1 hardening 2026-05-29)', () => {
+  async function setupCar() {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    return env.authenticatedContext(aliceAuth.uid, { email: aliceAuth.email });
+  }
+
+  it('create with an extra field is denied (hasOnly)', async () => {
+    const ctx = await setupCar();
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        loggedByUid: ALICE_UID,
+        odometer: 100,
+        gallons: 10,
+        cost: 30,
+        loggedAt: serverTimestamp(),
+        note: 'sneaky extra field',
+      })
+    );
+  });
+
+  it('create with a non-numeric odometer is denied', async () => {
+    const ctx = await setupCar();
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        loggedByUid: ALICE_UID,
+        odometer: 'lots',
+        gallons: 10,
+        cost: 30,
+        loggedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('create with negative gallons is denied', async () => {
+    const ctx = await setupCar();
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        loggedByUid: ALICE_UID,
+        odometer: 100,
+        gallons: -5,
+        cost: 30,
+        loggedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('create with a forged (client-clock) loggedAt is denied', async () => {
+    // The entry list orders by loggedAt; a forged timestamp would
+    // reorder fills and silently corrupt every reader's computed MPG.
+    // Rule requires loggedAt == request.time (i.e. serverTimestamp()).
+    const ctx = await setupCar();
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        loggedByUid: ALICE_UID,
+        odometer: 100,
+        gallons: 10,
+        cost: 30,
+        loggedAt: Timestamp.fromDate(new Date('2020-01-01T00:00:00Z')),
+      })
+    );
+  });
+
+  it('create with no loggedAt is denied', async () => {
+    const ctx = await setupCar();
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        loggedByUid: ALICE_UID,
+        odometer: 100,
+        gallons: 10,
+        cost: 30,
+      })
+    );
+  });
+
+  it('update writing a non-numeric cost is denied', async () => {
+    const ctx = await setupCar();
+    await seedEntry('car-1', 'e1', {
+      loggedByUid: ALICE_UID,
+      odometer: 100,
+      gallons: 10,
+      cost: 30,
+      loggedAt: serverTimestamp(),
+    });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1', 'entries', 'e1'), {
+        cost: 'free',
+      })
     );
   });
 });

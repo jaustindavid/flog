@@ -9,14 +9,18 @@ _Copyright © 2026 Austin David. All rights reserved._
 
 **A fuel log for small groups who share cars.**
 
-flog replaces the lightweight Google Form a lot of families use to
-track fill-ups across shared vehicles — same low-friction capture at
-the pump, plus a real step up in ergonomics (mobile-first, one-tap car
-switch, installable to your phone's home screen) and a small step up in
-usefulness (per-car MPG, computed for you).
+flog replaces the lightweight Google Form my family used to track
+fill-ups across our vehicles — same low-friction capture at the pump,
+plus a real step up in ergonomics (mobile-first, one-tap car switch,
+installable to your phone's home screen) and a small step up in
+usefulness (per-car MPG, range, stats computed for you).
 
 The canonical user is a family: a few people sharing a handful of cars,
 logging gas at the pump from their phones.
+
+It runs at flog.austindavid.com, where a single instance can host
+several independent groups, kept private from each other. Email me
+if you'd like a free fuel logger of your own.
 
 ---
 
@@ -27,11 +31,14 @@ logging gas at the pump from their phones.
   screen.
 - **Per-car MPG** — last-fill, average of the last 5, and lifetime,
   computed automatically from your fill-ups.
+- **Per-car stats** — expected driving range, P95 MPG, longest tank,
+  and largest fill, derived from your fill-up history.
 - **Multiple cars, shared by email** — own your cars; share one with a
   family member by their email and they can log fills too.
 - **Edit or delete** entries when someone fat-fingers an odometer.
-- **Installable (PWA)** — add it to your Android home screen; it runs
-  standalone like a native app.
+- **Installable** — add it to your phone's home screen; it runs
+  standalone like a native app, and works offline through fills with
+  poor signal (they sync when you're back online).
 - **Sign in with Google**, gated by an allowlist so only invited people
   get in.
 
@@ -63,11 +70,11 @@ See [`PRD.md`](PRD.md) for the full product spec and data model, and
 
 ## Status
 
-v0 is feature-complete on the development environment: Google sign-in
-with allowlist, cars + share-by-email, mobile-first fill-up logging,
-per-car MPG, edit/delete, and an installable PWA. Production cutover and
-family onboarding are the next step. Development continues from
-[`BACKLOG.md`](BACKLOG.md).
+v0 is live in production at flog.austindavid.com: Google sign-in with
+allowlist, cars + share-by-email, mobile-first fill-up logging, per-car
+MPG and stats, edit/delete, and an installable offline-capable app. The
+family is onboarded and historical fill-ups are imported; development
+continues from [`BACKLOG.md`](BACKLOG.md).
 
 ## Running locally
 
@@ -82,8 +89,10 @@ npm run build:dev    # production build (dev config)
 ```
 
 Firebase project config lives in `.env.development` / `.env.production`
-(gitignored). Deployment is `npm run deploy:{dev,prod}` for hosting plus
-`npm run deploy:rules:{dev,prod}` for the Firestore security rules.
+(gitignored). Deployment is `npm run deploy:{dev,prod}`, which ships
+both the hosting bundle and the Firestore security rules. Escape
+hatches for one without the other: `npm run deploy:hosting:{dev,prod}`
+and `npm run deploy:rules:{dev,prod}`.
 
 ## How it's built
 

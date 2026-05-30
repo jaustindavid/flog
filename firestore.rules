@@ -3,6 +3,20 @@ rules_version = '2';
 // flog Firestore rules — translation of PRD §6 access control matrix.
 // ADMIN_EMAIL is hardcoded (bootstrap-admin carve-out per PRD §5.4
 // + §6 helper). Same literal in dev and prod deployments.
+//
+// Two layers of enforcement:
+//   1. AUTHORIZATION — who may touch a doc (ownerUid / sharee /
+//      allowlist / admin). Original M2–M5 logic, unchanged.
+//   2. VALIDATION — what shape a write may have. Added 2026-05-29
+//      (security review P1): every create/update pins its field SET
+//      (hasOnly), TYPES, numeric RANGES, and server-set timestamps
+//      (createdAt/loggedAt == request.time). Without this, any
+//      allowlisted client using the raw SDK could write garbage,
+//      extra fields, a forged loggedAt (which reorders entries and
+//      silently corrupts every reader's MPG/stat numbers), or a
+//      forged createdAt. The numeric upper bounds are deliberately
+//      generous — their job is to reject NaN/Infinity/absurd values,
+//      not to enforce data quality (the client validators do that).
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -17,21 +31,45 @@ service cloud.firestore {
       allow read: if request.auth != null
                      && request.auth.uid == userId;
 
+      // create: allowlisted self only; field set pinned, uid bound to
+      // the doc id, createdAt server-set. email is typed but NOT
+      // pinned to token.email — the client stores canonicalEmail()
+      // (lowercased) which a token's email claim may differ from by
+      // case, and rules can't lowercase; pinning it would risk
+      // breaking first sign-in (see security review P3).
       allow create: if request.auth != null
                        && request.auth.uid == userId
-                       && allowed(request.auth.token.email);
+                       && allowed(request.auth.token.email)
+                       && request.resource.data.keys()
+                            .hasOnly(['uid', 'email', 'displayName', 'createdAt'])
+                       && request.resource.data.uid == userId
+                       && request.resource.data.email is string
+                       && request.resource.data.displayName is string
+                       && request.resource.data.createdAt == request.time;
 
       allow update: if request.auth != null
                        && request.auth.uid == userId
                        && request.resource.data.diff(resource.data)
                             .affectedKeys()
-                            .hasOnly(['displayName']);
+                            .hasOnly(['displayName'])
+                       && request.resource.data.displayName is string;
 
       allow delete: if false;
     }
 
     // PRD §6.2 — Car
     match /cars/{carId} {
+      // Field/shape validation for a Car create. Authorization
+      // (allowlisted + ownerUid == self) is checked separately below.
+      function validCarCreate(data) {
+        return data.keys()
+                 .hasOnly(['name', 'ownerUid', 'shareeEmails', 'createdAt'])
+            && data.name is string
+            && data.ownerUid is string
+            && data.shareeEmails is list
+            && data.createdAt == request.time;
+      }
+
       allow read: if request.auth != null && (
         resource.data.ownerUid == request.auth.uid
         || request.auth.token.email in resource.data.shareeEmails
@@ -39,11 +77,20 @@ service cloud.firestore {
 
       allow create: if request.auth != null
                        && allowed(request.auth.token.email)
-                       && request.resource.data.ownerUid == request.auth.uid;
+                       && request.resource.data.ownerUid == request.auth.uid
+                       && validCarCreate(request.resource.data);
 
+      // update: owner only; only name + shareeEmails may change
+      // (hasOnly makes ownerUid AND createdAt immutable automatically —
+      // they're not in the allowed set). Types re-checked on the
+      // resulting doc so a rename/share can't write garbage.
       allow update: if request.auth != null
                        && resource.data.ownerUid == request.auth.uid
-                       && request.resource.data.ownerUid == resource.data.ownerUid;
+                       && request.resource.data.diff(resource.data)
+                            .affectedKeys()
+                            .hasOnly(['name', 'shareeEmails'])
+                       && request.resource.data.name is string
+                       && request.resource.data.shareeEmails is list;
 
       allow delete: if request.auth != null
                        && resource.data.ownerUid == request.auth.uid;
@@ -58,6 +105,21 @@ service cloud.firestore {
             parentCar().ownerUid == request.auth.uid
             || request.auth.token.email in parentCar().shareeEmails
           );
+        }
+
+        // Numeric shape for an entry's three editable fields. Validates
+        // the RESULTING doc (request.resource.data), so it covers both
+        // create and a partial update (the unchanged fields carry their
+        // prior, already-valid values). Bounds reject strings, objects,
+        // null, negatives, NaN, and Infinity (NaN/Infinity fail the
+        // range comparisons) while never rejecting a real fill.
+        function validEntryNumbers(data) {
+          return data.odometer is number
+              && data.odometer >= 0 && data.odometer < 100000000
+              && data.gallons is number
+              && data.gallons > 0 && data.gallons < 100000
+              && data.cost is number
+              && data.cost >= 0 && data.cost < 100000000;
         }
 
         // Owner of the parent car may edit/delete ANY entry on it.
@@ -83,17 +145,29 @@ service cloud.firestore {
 
         allow read: if canReadParent();
 
+        // create: car-reader logging as self; field set pinned,
+        // loggedAt server-set, numerics validated. The hasOnly + the
+        // loggedAt == request.time check together stop a forged
+        // client-clock timestamp (the entry order, and thus everyone's
+        // computed MPG, depends on loggedAt).
         allow create: if canReadParent()
-                         && request.resource.data.loggedByUid == request.auth.uid;
+                         && request.resource.data.keys().hasOnly(
+                              ['loggedByUid', 'odometer', 'gallons',
+                               'cost', 'loggedAt'])
+                         && request.resource.data.loggedByUid == request.auth.uid
+                         && request.resource.data.loggedAt == request.time
+                         && validEntryNumbers(request.resource.data);
 
         // edit-delete-entries dispatch 2026-05-29: relaxed from
         // `if false`. odometer/gallons/cost editable; the hasOnly
         // guard makes loggedByUid and loggedAt immutable on update
         // (same field-restriction idiom M2 used for User displayName).
+        // P1 (2026-05-29): + validEntryNumbers on the resulting doc.
         allow update: if canMutate()
                          && request.resource.data.diff(resource.data)
                               .affectedKeys()
-                              .hasOnly(['odometer', 'gallons', 'cost']);
+                              .hasOnly(['odometer', 'gallons', 'cost'])
+                         && validEntryNumbers(request.resource.data);
 
         // edit-delete-entries dispatch 2026-05-29: extended from
         // M4's owner-only (cascade) rule to owner-or-current-read-
@@ -120,8 +194,10 @@ service cloud.firestore {
       // The *requesting* user must be allowlisted to add a new email
       // (e.g., share-with-user side effect in M3). See dispatch
       // M2-auth-allowlist.md §7.3 — do NOT write allowed(userEmail).
+      // The doc body is always an empty map {}; pin that shape.
       allow create: if request.auth != null
-                       && allowed(request.auth.token.email);
+                       && allowed(request.auth.token.email)
+                       && request.resource.data.keys().size() == 0;
 
       allow update: if false;
 

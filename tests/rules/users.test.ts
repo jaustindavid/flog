@@ -12,6 +12,7 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, it } from 'vitest';
 import {
@@ -192,5 +193,44 @@ describe('users/{uid} rules — PRD §6.1', () => {
       email: aliceAuth.email,
     });
     await assertFails(deleteDoc(doc(ctx.firestore(), 'users', ALICE_UID)));
+  });
+});
+
+describe('users — field/shape validation (P1 hardening 2026-05-29)', () => {
+  async function allowlistAlice() {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'allowlist', ALICE_EMAIL), {});
+    });
+  }
+
+  it('create with an extra field is denied (hasOnly)', async () => {
+    await allowlistAlice();
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'users', aliceAuth.uid), {
+        uid: aliceAuth.uid,
+        email: aliceAuth.email,
+        displayName: 'Alice',
+        createdAt: serverTimestamp(),
+        admin: true,
+      })
+    );
+  });
+
+  it('create with a forged createdAt is denied', async () => {
+    await allowlistAlice();
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'users', aliceAuth.uid), {
+        uid: aliceAuth.uid,
+        email: aliceAuth.email,
+        displayName: 'Alice',
+        createdAt: Timestamp.fromDate(new Date('2020-01-01T00:00:00Z')),
+      })
+    );
   });
 });

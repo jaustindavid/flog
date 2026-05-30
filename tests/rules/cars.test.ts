@@ -16,6 +16,7 @@ import {
   updateDoc,
   serverTimestamp,
   writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -413,5 +414,70 @@ describe('deleteCar cascade — M4 entries cleanup', () => {
       );
       expect(remainingEntries.empty).toBe(true);
     });
+  });
+});
+
+describe('cars — field/shape validation (P1 hardening 2026-05-29)', () => {
+  it('create with an extra field is denied (hasOnly)', async () => {
+    await seedAllowlist([ALICE_EMAIL]);
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1'), {
+        name: 'Minivan',
+        ownerUid: ALICE_UID,
+        shareeEmails: [],
+        createdAt: serverTimestamp(),
+        secret: 'sneaky',
+      })
+    );
+  });
+
+  it('create with a forged createdAt is denied', async () => {
+    await seedAllowlist([ALICE_EMAIL]);
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1'), {
+        name: 'Minivan',
+        ownerUid: ALICE_UID,
+        shareeEmails: [],
+        createdAt: Timestamp.fromDate(new Date('2020-01-01T00:00:00Z')),
+      })
+    );
+  });
+
+  it('create with non-list shareeEmails is denied', async () => {
+    await seedAllowlist([ALICE_EMAIL]);
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      setDoc(doc(ctx.firestore(), 'cars', 'car-1'), {
+        name: 'Minivan',
+        ownerUid: ALICE_UID,
+        shareeEmails: 'bob@example.com',
+        createdAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('update adding a novel field is denied (hasOnly)', async () => {
+    await seedCar('car-1', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+    const ctx = env.authenticatedContext(aliceAuth.uid, {
+      email: aliceAuth.email,
+    });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-1'), {
+        name: 'Renamed',
+        secret: 'sneaky',
+      })
+    );
   });
 });
