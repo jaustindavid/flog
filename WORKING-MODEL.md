@@ -26,44 +26,64 @@ practitioner's guide that ties them together.
 
 ## 1. The cast
 
-**Owner** (Austin) — has the product context. Makes
-design decisions. Reviews + commits. Doesn't write code
-directly (with rare exceptions); operates through
-delegation.
+**Owner** (Austin) — has the product context. Sets
+direction, makes design decisions, reviews + commits.
+Doesn't write code directly (with rare exceptions);
+operates through delegation.
 
 **Nautilus** (long-context Claude session) — the
-architect. Holds the conversation history, drafts
-dispatches, coordinates between roles, handles
-housekeeping (BACKLOG updates, post-stall recovery,
-documentation maintenance). Carries the design
-conversation back-and-forth with the owner. One
-nautilus per session; sessions may span hours or days.
+architect. Holds the conversation history and the design
+intent; carries the design conversation with the owner;
+**dispatches cuttlefish for research, design, pre-read,
+and implementation, and folds their findings back**;
+picks the model tier per dispatch (§5); handles
+housekeeping (BACKLOG, post-stall recovery, doc
+maintenance). One nautilus per session; sessions may span
+hours or days. It coordinates but does not predate — it
+provides the shell; the cuttlefish do the work.
 
-**Implementer cuttlefish** (short-context agent) —
-executes a single dispatch end-to-end. Reads the brief
-cold, has no conversation history, runs gates, writes
-handoff, updates BACKLOG. Spawned and disposed per
-dispatch. Optimized for focused execution; deliberately
-constrained on scope.
+**Cuttlefish** (short-context agents) — the
+dispatched-agent class. Each is spawned for a single
+bounded task, reads what it needs cold (no conversation
+history), and is disposed when done. They are **not
+downstream-only hands** — the nautilus casts them across
+the whole lifecycle, in distinct roles (§3 covers how to
+run the upstream ones):
 
-**Reviewer cuttlefish** (short-context agent, pre-read
-role) — reads a brief BEFORE the implementer runs it,
-finds blockers / ambiguities / stale references. Cheap
-to spawn (~2-10 minutes), catches issues that would
-cost ~10-30 minutes of implementer time to discover
-and recover from. Same agent class as implementer;
-different prompt.
+- **Research / exploration** — read-only, fan-out. Survey
+  prior art, map unfamiliar code, gather evidence. Return
+  *conclusions, not file dumps*; their output feeds
+  design.
+- **Design** — generate and/or stress-test design options
+  (sometimes several in parallel for the nautilus to
+  judge), so the owner sees a considered space rather than
+  a single guess.
+- **Reviewer** (pre-read) — read a brief BEFORE the
+  implementer runs it; find blockers / ambiguities / stale
+  references. Cheap (~2-10 min); catch issues that cost
+  far more in implementer time + recovery.
+- **Implementer** — execute a single dispatch end-to-end:
+  read the brief cold, run gates, write the handoff,
+  update BACKLOG. Optimized for focused execution;
+  deliberately scope-constrained.
 
-The two cuttlefish roles never communicate directly.
-Both report to the nautilus, which mediates.
+Same agent class throughout — a research cuttlefish is
+not a different creature from an implementer, just a
+different prompt and a different bounded task. Cuttlefish
+never communicate with each other; every one reports to
+the nautilus, which mediates and folds.
 
 ---
 
 ## 2. The lifecycle
 
 ```text
-owner ←→ nautilus            (design conversation)
+   research / exploration    (cuttlefish fan-out, read-only;
+            ↓                  optional — for novel problems)
+       fold findings         (nautilus)
             ↓
+owner ←→ nautilus            (design conversation; may spawn
+            ↓                  design cuttlefish to widen options)
        BACKLOG entry         (decisions captured)
             ↓ (promote to Next)
        brief draft           (nautilus writes;
@@ -73,26 +93,35 @@ owner ←→ nautilus            (design conversation)
             ↓
        fold findings         (nautilus revises brief)
             ↓
-       spawn implementer     (cuttlefish runs end-to-end)
+       spawn implementer     (cuttlefish runs end-to-end;
+                              nautilus picks the model tier, §5)
             ↓
-       gates pass            (npm test / rules / lint /
-                              build / markdownlint)
+       gates pass            (lint / lint:md / test / rules /
+                              build:dev / build:prod)
             ↓
        handoff doc           (cuttlefish writes;
                               or nautilus on stall)
             ↓
        BACKLOG move          (Next → Done)
             ↓
-       owner review + commit
+       owner review (V2) + commit
 ```
 
-The arrows are loose. Loops happen — pre-read findings
-might trigger a design re-conversation. Owner might
-push back on a brief and we restart. Implementer might
-flag a stop-and-ask, kicking back to nautilus.
+The arrows are loose. Loops happen — research can reopen a
+design question, pre-read findings might trigger a design
+re-conversation, the owner might push back on a brief and
+we restart, the implementer might flag a stop-and-ask and
+kick back to the nautilus.
 
 What's load-bearing:
 
+- **Research and design can be cuttlefish-fed**, not just
+  owner+nautilus chat. For a novel problem the nautilus
+  spawns research/exploration cuttlefish first and folds
+  their conclusions into the design conversation; for a
+  wide solution space, design cuttlefish surface options.
+  The owner still makes the call — the cuttlefish widen
+  and sharpen it (§3).
 - **Design conversation lives in the BACKLOG entry**,
   not just in chat. The entry accumulates settled
   decisions and is what the next session (or the brief
@@ -104,10 +133,51 @@ What's load-bearing:
 - **Handoff is for the next nautilus + the owner**, not
   for the implementer that wrote it. It's a persistent
   record after the implementer finishes.
+- **Owner review (V2) is a real step.** The owner
+  validates hands-on after the handoff, at/before commit;
+  agents never commit (§5).
 
 ---
 
-## 3. Pre-read — what, when, why
+## 3. Dispatching cuttlefish (research, design, pre-read)
+
+Before — and around — the implementer dispatch, the
+nautilus casts cuttlefish in three upstream roles. All
+share the same discipline: a purpose-built prompt, a
+bounded task, a defined report format, and *read-only*
+unless the role is implementation. The nautilus **folds**;
+it never forwards one cuttlefish's raw output to another.
+
+### Research & exploration
+
+When a problem is novel or touches unfamiliar code, spawn
+a research/exploration cuttlefish BEFORE designing. It
+fans out (prior-art survey, codebase archaeology, evidence
+gathering) and returns **conclusions, not file dumps** —
+the nautilus wants the finding, not the search trail.
+Read-only: it locates and concludes; it does not edit.
+Example: the maintenance phase opened with a survey of
+consumer maintenance apps that shaped the data model and
+the no-categories decision before any design was written.
+
+When to skip: if the nautilus genuinely has the context,
+reason inline. But "I have full context" is often wrong
+(see §6.4) — a cheap research pass de-risks a design built
+on assumptions.
+
+### Design
+
+For a wide or contested solution space, spawn design
+cuttlefish to generate and/or stress-test options —
+sometimes several in parallel, which the nautilus judges
+and synthesizes — so the owner sees a considered space,
+not the nautilus's first guess. The owner still decides;
+the design cuttlefish widen the menu and surface
+trade-offs. For a narrow space, the owner ←→ nautilus
+conversation is enough; don't manufacture options for
+their own sake (see §6.1 on over-engineering).
+
+### Pre-read
 
 The pre-read pattern: before spawning the implementer
 cuttlefish, spawn a **reviewer cuttlefish** with a prompt
@@ -249,10 +319,19 @@ tripwire stays in the BACKLOG entry's Done version
 forward — future contributors see when a decision
 should be revisited.
 
-**Gates are non-negotiable.** `npm test`, `npm
-run test:rules`, `npm run lint`, `npm run build`, `npx
-markdownlint-cli2 "**/*.md"`. All five pass before the
-handoff is written. If a gate fails, fix it; don't
+**Model tier fits the risk.** The nautilus picks the
+cuttlefish's model per dispatch: **Sonnet** for mechanical
+/ low-risk work (UI, pure-function refactors, doc edits),
+**Opus** for security, Firestore rules, data-model, or
+anything where a subtle wrong call is expensive — and for
+pre-reads of that same surface. The chosen tier goes in
+the brief's model line so it's an explicit decision, not a
+default.
+
+**Gates are non-negotiable.** `npm run lint`, `npm run
+lint:md`, `npm test` (TZ-pinned), `npm run test:rules`,
+`npm run build:dev`, `npm run build:prod`. All pass before
+the handoff is written. If a gate fails, fix it; don't
 paper over.
 
 **Handoff before polish.** As soon as gates pass,
@@ -479,14 +558,18 @@ self-contained piece of work.
 - **Briefs**: `dispatch/<name>.md` (per dispatch)
 - **Handoffs**: `dispatch/<name>-handoff.md` (per
   dispatch, matched pair with the brief)
-- **BACKLOG**: `dispatch/BACKLOG.md` (single file, all
-  horizons + Done)
-- **This doc**: `dispatch/WORKING-MODEL.md`
-- **Handoff structure spec**:
-  `dispatch/HANDOFF-TEMPLATE.md`
+- **BACKLOG**: `BACKLOG.md` (project root; single file,
+  all horizons + Done)
+- **This doc**: `WORKING-MODEL.md` (project root)
+- **Conceptual frame**: `CUTTLEFISH-NAUTILUS.md` (project
+  root) — the long-form paper this playbook pairs with
+- **Handoff structure spec**: `HANDOFF-TEMPLATE.md`
+  (project root)
 - **Codebase guardrails**: `AGENTS.md` (project root)
 - **Product spec**: `PRD.md` (project root)
-- **Architecture**: `ARCHITECTURE.md` (project root)
+- **Architecture**: `ARCHITECTURE.md` (project root; not
+  yet drafted — PRD §4 + AGENTS.md are the interim
+  reference)
 
 A typical dispatch leaves behind two files in
 `dispatch/` (brief + handoff) plus one BACKLOG edit
