@@ -7,6 +7,11 @@ _Copyright © 2026 Austin David. All rights reserved._
 > pairing — the planning docs are written dense and self-contained so
 > a fresh Claude session can cold-read and contribute immediately.
 
+**Status (updated 2026-05-31):** v0 has shipped; flog is in continuous
+post-v0 development. This is a living document — §1 describes current
+reality, §10 is the frozen v0 build log, and `BACKLOG.md` is the live
+working list.
+
 ---
 
 ## 1. Overview
@@ -21,7 +26,7 @@ The canonical v0 user is the project owner's family: 4 people sharing
 4–5 cars, ~99% fuel fill-up entries, ~1% incidental maintenance notes
 in the legacy Google Form. The current form captures car / odometer /
 gallons / cost / free-text-notes and produces no derived view. flog
-v0 ships that same capture loop with a small step up in usefulness
+delivers that same capture loop with a small step up in usefulness
 (per-car MPG view) and a real step up in ergonomics (mobile-first,
 persistent UI, one-tap car switch).
 
@@ -38,8 +43,9 @@ persistent UI, one-tap car switch).
 
 ### 1.2 Non-goals
 
-Each item below is a deliberate "no" for v0. Future BACKLOG items
-that would violate one get a ⚠️ flag pointing back here.
+Each item below is a current product boundary — a deliberate "no"
+that still holds post-v0 (not a v0-only snapshot). Future BACKLOG
+items that would violate one get a ⚠️ flag pointing back here.
 
 - **Not a fleet management tool.** No commercial-vehicle features,
   no driver assignment workflows.
@@ -53,42 +59,27 @@ that would violate one get a ⚠️ flag pointing back here.
   doesn't require data migration, only UI.
 - **Not a price-comparison tool.** No fetching of external gas
   prices.
-- **No third-party integrations** (Carfax, OBD-II, fuel cards, etc.)
-  in v0.
-- **No maintenance entries or service reminders** in v0. Reserved
-  for the maintenance phase.
+- **No third-party integrations** (Carfax, OBD-II, fuel cards, etc.).
 - **No CI/CD gating.** Manual `npm run deploy:dev` and `npm run
-  deploy:prod` is the v0 promotion model. Matches the sibling
+  deploy:prod` is the promotion model. Matches the sibling
   project's posture; revisit when complexity earns it.
 - **No analytics, no behavioral tracking, no third-party scripts**
   beyond Google Identity for OAuth.
-- **No custom branding, no logo, no privacy page** in v0. v0
-  competes with a Google Form, which has none of these either.
-  Revisit when scope/user-base graduates past family.
-- **No custom domain** in v0. `flog-dev.web.app` and
-  `flog-prod.web.app` are the Hosting URLs.
 
 ### 1.3 Future-phase / deferred
 
-The working list is `BACKLOG.md` once v0 ships. Notable deferrals
-already known at PRD time:
+The live working list is `BACKLOG.md`. Notable deferrals identified
+at PRD time that remain open:
 
-- Edit/delete entries (Soon)
-- Maintenance entries + service reminders + spend reporting — design
-  now locked; full spec in §14 (Maintenance phase)
-- Reports beyond per-car MPG (max-ever-fuel, best-MPG, trends)
-- CSV export of your data; account deletion (committed-to in §1.4,
-  not v0)
+- CSV export of your data; account deletion (committed-to in §1.4)
 - Admin allowlist UI (separate from the share-with-user side effect)
-- Custom domain, logo, privacy page (when product graduates past
-  family scope)
 - Dark mode
 
 ### 1.4 Philosophical commitments
 
 - **Your data is yours.** Export (CSV) and account-delete (purge
   your User doc + Entries you authored + un-share you from others'
-  cars) are committed-to. They don't ship in v0, but the data model
+  cars) are committed-to. They haven't shipped yet, but the data model
   is built so they drop in cleanly later.
 - **No behavioral telemetry, ever.** No GA, no Posthog, no Segment,
   no third-party scripts beyond Google Identity for OAuth. If we
@@ -196,6 +187,7 @@ Not destroyed in v0 (account delete deferred).
 | `ownerUid` | string | yes | creator; immutable post-create |
 | `shareeEmails` | array&lt;string&gt; | yes (may be empty) | additional authorized loggers; canonical lowercase |
 | `createdAt` | timestamp | yes | server-set |
+| `maintenanceReminder` | map or null | no | reminder config; `null` when unset, else `{ label, intervalMiles, intervalMonths }` with ≥1 interval non-null. The "last done" baseline is DERIVED (§14.3), not stored here. Full maintenance model: §5.5 |
 
 Relationships: 1 User → many Cars (owned); N Users → many Cars
 (shared via `shareeEmails`).
@@ -242,6 +234,29 @@ access via a Firestore rules carve-out
 (`request.auth.token.email == ADMIN_EMAIL`) rather than via a doc,
 so the cold-start case works.
 
+### 5.5 Maintenance (`cars/{carId}/maintenance/{maintId}`)
+
+A subcollection sibling to Entry (§5.3), kept **separate** so fuel
+`entries` stay a pure MPG stream (rationale: §14 intro). One doc per
+logged service.
+
+| field | type | required | notes |
+|---|---|---|---|
+| `id` | string | yes | auto doc id |
+| `loggedByUid` | string | yes | who created it |
+| `date` | timestamp | yes | when the service happened; **user-set and editable** (unlike fuel `loggedAt` — backdating a real service date is expected). The reminder time-baseline (§14.3) and spend bucketing (§14.4) use this. |
+| `odometer` | integer | yes | miles at service; required (powers the mileage reminder). Future nicety: auto-fill from a recent fuel fill-up. |
+| `cost` | number | yes | float; unitless (USD assumed, as elsewhere) |
+| `note` | string | yes | freeform "what happened" — replaces any category taxonomy; carries the entry's meaning |
+| `resetsReminder` | boolean | yes | did this service reset the car's reminder (the input-screen checkbox; default `false`). The latest `resetsReminder == true` entry is the DERIVED reminder baseline (§14.3). |
+| `loggedAt` | timestamp | yes | server-set on submit; not user-editable (audit) |
+
+Lifecycle: full CRUD by the parent car's owner-or-current-sharee
+(§6.5). `date` is backdatable; `loggedByUid` / `loggedAt` are
+immutable. The car-delete cascade (§6.2 note) also removes this
+subcollection. Reminder config lives on the Car doc
+(`maintenanceReminder`, §5.2), never here.
+
 ---
 
 ## 6. Access control
@@ -266,15 +281,15 @@ exists(/databases/$(db)/documents/allowlist/$(email))`.
 "Update" on a Car doc means modifying the car's own metadata
 (rename, add/remove sharee). `ownerUid` is immutable post-create
 (§5.2); `createdAt` is server-set. So in practice owner-update
-protects `name` and `shareeEmails` — those are the only mutable
-fields. Editing a fuel record is a different operation entirely
-and lives under Entry (§6.3), which is `none in v0`.
+protects `name`, `shareeEmails`, and `maintenanceReminder` (the
+reminder config, §6.5) — those are the mutable fields. Editing a fuel
+record is a different operation entirely and lives under Entry (§6.3).
 
 | op | who | rule |
 |---|---|---|
 | read | owner OR sharee | `resource.data.ownerUid == request.auth.uid \|\| request.auth.token.email in resource.data.shareeEmails` |
 | create | any allowlisted user | `allowed(request.auth.token.email) && request.resource.data.ownerUid == request.auth.uid` |
-| update (rename, share/unshare) | owner only | `resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid` |
+| update (rename, share/unshare, reminder config) | owner only | `resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid`; `hasOnly` allow-set is `name`/`shareeEmails`/`maintenanceReminder` (§6.5) |
 | delete | owner only | `resource.data.ownerUid == request.auth.uid` |
 
 Note on delete: Firestore does not cascade deletes. The app code
@@ -349,6 +364,34 @@ ADMIN_EMAIL` carve-out in the helper, so the rule covers both
 "admin bootstrap" and "car-share side effect" paths without needing
 to enumerate them.
 
+### 6.5 Maintenance
+
+The maintenance subcollection (§5.5) mirrors Entry (§6.3): read /
+create / update / delete gate on the parent car's
+owner-or-current-sharee via the shared `canReadParent()` /
+`canMutate()` helpers (lifted to `cars/{carId}` scope so entries and
+maintenance share them).
+
+| op | who | rule |
+|---|---|---|
+| read | parent Car readers | inherit from Car read rule (`canReadParent()`) |
+| create | parent Car readers | `canReadParent() && request.resource.data.loggedByUid == request.auth.uid` + field validation (below) |
+| update | parent Car owner OR original logger | `canMutate() && diff().affectedKeys().hasOnly(['date','odometer','cost','note','resetsReminder'])` — `loggedByUid` / `loggedAt` immutable |
+| delete | parent Car owner OR original logger | `canMutate()` |
+
+Field validation (P1 style, on create): `hasOnly` pins the field set;
+`odometer` / `cost` numeric + range; `note` a string; `resetsReminder`
+a bool; `loggedAt == request.time`; **`date` is any timestamp — NOT
+pinned to `request.time`, because backdating a real service date is
+allowed** (the one deliberate divergence from the fuel-entry
+server-timestamp rule). Numeric ranges use `is number`, never `is int`
+(the JS SDK double-encodes whole numbers).
+
+The Car update rule (§6.2) extends its `hasOnly` allow-set to include
+`maintenanceReminder` (owner-only), with shape validation on the
+reminder map: `label` a string; `intervalMiles` / `intervalMonths`
+each `is number` or absent; at least one interval present.
+
 ---
 
 ## 7. User flows
@@ -405,6 +448,15 @@ one save. Form fits one mobile screen without scrolling.
 Submit succeeds; warning toast: "Odometer went down from {prior}.
 Saved anyway."
 
+**Stats panel (below the form).** Under the capture form the log
+screen renders a read-only per-car panel that cross-fades in as the
+car's entries load: last-fill and lifetime-average MPG (the MPG tile),
+plus an **expected-range band**, **P95 MPG**, **longest tank** (max
+plausible odometer delta, gap-excluded), and **largest fill** (max
+gallons). All computed client-side from the fetched entries (§8
+budget); the percentile-based range and P95 need 5+ fills (a "need 5+
+fills" hint shows until then). Read-only — never blocks capture.
+
 ### Flow D: Add a car
 
 **Goal**: any user adds a car they will own.
@@ -445,10 +497,42 @@ sign-in puts the car in their list (Flow B).
    - "Lifetime avg MPG: 31.1"
    - List of entries (date, odometer, gallons, cost, computed MPG
      for that fill)
+   - Maintenance section: "Log maintenance" button, service history,
+     the 3×3 spend report (§14.4), reminder config, and the next-due
+     projection (§14.3) — logging steps in Flow G
 
 **Acceptance**: page renders within 1 Car read + 1 Entries query.
 Latest 50 entries shown; lifetime avg computed client-side from the
 fetched set. (Tripwire in §8.)
+
+### Flow G: Log maintenance
+
+**Goal**: record a service (and optionally reset the reminder clock).
+
+1. On the car-detail screen (maintenance's home, §14.5), tap "Log
+   maintenance" → a modal opens (consistent with Add-car / Edit-entry).
+2. Fill date (backdatable), odometer, cost, note. If the car has a
+   reminder configured, an "↺ Reset [label]" checkbox is shown
+   (default OFF); checking it writes `resetsReminder = true`, making
+   this the new derived baseline (§14.3).
+3. Save → writes a `maintenance` doc (§5.5, §6.5). The history list,
+   spend report (§14.4), and next-due projection (§14.3) update.
+
+**Acceptance**: a sharee or owner can log; `date` is user-set,
+`loggedAt` server-set; reset re-baselines the reminder.
+
+### Flow H: Service-reminder banner
+
+**Goal**: be reminded a service is due while logging fuel.
+
+1. On the fuel screen, if the selected car has a reminder configured
+   AND it is due/overdue, a banner appears (the only maintenance
+   element on the fuel screen, §14.5).
+2. Tap the banner → opens the maintenance modal (Flow G) in create
+   mode, so the user logs the service that resets the clock.
+
+**Acceptance**: banner shows only when configured + baseline + due;
+mechanics in §14.3. No push (in-app only).
 
 ---
 
@@ -555,8 +639,9 @@ is unchanged.
   Guidelines) commitment in v0. Form inputs have labels; buttons
   have accessible names. Revisit when a real accessibility need
   surfaces.
-- **No decorative graphics, no custom illustrations, no logo.**
-  Tailwind defaults; pick a primary accent color during M2.
+- **Minimal visual chrome — no decorative graphics, no custom
+  illustrations.** Tailwind defaults with a blue primary accent; a
+  favicon set + PWA app icon ship (`public/`).
 - **Dark mode**: deferred. BACKLOG.
 
 ---
@@ -571,7 +656,8 @@ is unchanged.
 | M4 | Entries (log fill-up) | Mobile-first log form, append-only, server timestamp, odometer-monotonicity flag-but-accept. | Family can switch from Google Form to flog without losing capture function. | M3 |
 | M5 | Per-car detail + MPG | Tap a car → entries list + last-fill MPG + lifetime avg MPG. | Per-car view renders in 1+1 Firestore reads; MPG numbers match a hand-computed reference. | M4 |
 
-Post-M5: v0 ships. BACKLOG.md takes over.
+Post-M5: ✅ v0 shipped (2026-05). `BACKLOG.md` is the live working
+list; the table above is frozen as the v0 build record.
 
 ---
 
@@ -613,16 +699,59 @@ Post-M5: v0 ships. BACKLOG.md takes over.
 
 ## 12. Implementation guidance for coding agents
 
-- Read **§5 (data model)** and **§6 (access control)** before
-  writing any data-access code or Firestore rules. Both are
-  load-bearing for v0's primary commitments.
-- The **cost spec in §8** is non-negotiable. If a change would add
-  an N+1 read or new per-page query, surface it in the brief;
+flog is built under the **cuttlefish / nautilus** model: a long-context
+**nautilus** (the architect session) coordinates short-context
+**cuttlefish** (focused dispatched agents) that do the actual building.
+The conceptual frame is [`CUTTLEFISH-NAUTILUS.md`](CUTTLEFISH-NAUTILUS.md)
+(the *why*); the day-to-day operational playbook is
+[`WORKING-MODEL.md`](WORKING-MODEL.md) (the *how*). Read those for the
+full picture — this section is the PRD-side orientation and defers
+operational detail to them.
+
+### 12.1 How a change flows
+
+Phases, loosely ordered — loops are normal (a pre-read can re-open
+design; the owner can push back and restart):
+
+1. **Research** (anything novel) — survey prior art / the problem space
+   before committing to a shape. E.g., the maintenance phase was
+   preceded by a consumer-app survey (§14 intro).
+2. **Design conversation** — owner ←→ nautilus. Settled decisions are
+   captured in the **BACKLOG entry** (not just chat); the entry accretes
+   until it is most of the brief.
+3. **Brief** — the nautilus writes a self-contained dispatch brief
+   (`dispatch/<name>.md`) for a cuttlefish with NO conversation history:
+   required reading, ACs, scope in/out, stop-and-ask, gates.
+4. **Pre-read** — a reviewer cuttlefish reads the brief + supporting
+   code cold and reports blockers / should-fixes BEFORE any code is
+   written (every M+ dispatch, usually S too — it has caught a real
+   issue on essentially every run). The nautilus folds the findings.
+5. **Implementation** — an implementer cuttlefish runs the brief
+   end-to-end. Model tier fits the risk: **Sonnet** for mechanical /
+   low-risk work, **Opus** for security, Firestore rules, or data-model
+   surfaces.
+6. **Gates** — all must pass before handoff: `npm run lint`, `lint:md`,
+   `test` (under the pinned `TZ`), `test:rules`, `build:dev`,
+   `build:prod`.
+7. **Handoff** — the cuttlefish writes `dispatch/<name>-handoff.md`
+   (shape per [`HANDOFF-TEMPLATE.md`](HANDOFF-TEMPLATE.md)) and moves the
+   BACKLOG item to Done.
+8. **Owner review (V2) + commit** — the owner validates hands-on and is
+   the only actor that commits. **Agents never commit.**
+
+### 12.2 Load-bearing checks (standing pre-flight)
+
+- Read **§5 (data model)** and **§6 (access control)** before writing
+  any data-access code or Firestore rules — both are load-bearing for
+  flog's primary commitments, and rules translate row-for-row from §6.
+- The **cost spec in §8** is non-negotiable. A change that adds an N+1
+  read or a new per-page query must be surfaced in the brief; the
   nautilus decides whether to accept.
-- **Open questions in §11.2 are NOT to be guessed at** — stop-and-
-  ask per WORKING-MODEL.md.
-- See `AGENTS.md` for codebase-level guardrails (drafted after this
-  PRD).
+- **Open questions in §11.2 are NOT to be guessed at** — stop and ask
+  (every brief carries an explicit stop-and-ask list).
+- See [`AGENTS.md`](AGENTS.md) for codebase-level guardrails (no `any`,
+  pure functions unit-tested, `is number` not `is int`, local-date
+  discipline, no new deps without sign-off).
 
 ---
 
@@ -685,38 +814,18 @@ timeline — a UI concern, decoupled from storage.
 
 ### 14.1 Data model
 
-New entity — Maintenance (`cars/{carId}/maintenance/{maintId}`):
-
-| field | type | required | notes |
-|---|---|---|---|
-| `id` | string | yes | auto doc id |
-| `loggedByUid` | string | yes | who created it |
-| `date` | timestamp | yes | when the service happened; **user-set and editable** (unlike fuel `loggedAt` — backdating a real service date is expected). Reminder time-baseline and report bucketing use this. |
-| `odometer` | integer | yes | miles at service; required (powers the mileage reminder). Future nicety: auto-fill from a fuel fill-up logged in the last day. |
-| `cost` | number | yes | float; unitless (USD assumed, as elsewhere) |
-| `note` | string | yes | freeform "what happened" — replaces any category taxonomy; carries the entry's meaning |
-| `resetsReminder` | boolean | yes | did this service reset the car's maintenance reminder (the input-screen checkbox; default `false`) |
-| `loggedAt` | timestamp | yes | server-set on submit; not user-editable (audit) |
-
-Car (§5.2) gains one field:
-
-| field | type | required | notes |
-|---|---|---|---|
-| `maintenanceReminder` | map or null | no | `null` when unset. When set: `{ label: string, intervalMiles: int\|null, intervalMonths: int\|null }`, with at least one interval non-null. **Config only** — the "last done" baseline is DERIVED (§14.3), never stored here. |
+**Folded into the core data model (§5).** The Maintenance subcollection
+(`cars/{carId}/maintenance/{maintId}`) is §5.5; the Car
+`maintenanceReminder` config field is in the §5.2 table. (Earlier
+drafts kept the maintenance schema here; it moved to §5 once the
+feature shipped, so the canonical data model lives in one place.)
 
 ### 14.2 Access control
 
-The maintenance subcollection mirrors Entry (§6.3): read / create /
-update / delete gated on the parent car's owner-or-current-sharee
-(reuse the `canReadParent()` / `canMutate()` pattern). Field validation
-in the P1 style — create pins the field set (`hasOnly`), types, and
-ranges; `loggedAt == request.time`; **`date` is any timestamp (NOT
-pinned to `request.time` — backdating is allowed)**; `odometer`/`cost`
-numeric + range; `note` is a string; `resetsReminder` is a bool. Update
-is restricted to the editable fields (`date`, `odometer`, `cost`,
-`note`, `resetsReminder`); `loggedByUid` and `loggedAt` immutable. The
-Car update rule (§6.2) extends its `hasOnly` allow-set to include
-`maintenanceReminder` (owner-only, as today).
+**Folded into the core access-control model (§6).** Maintenance
+subcollection rules (read / create / update / delete + field
+validation, including the backdatable-`date` divergence) are §6.5; the
+Car `maintenanceReminder` update rule is in §6.2.
 
 ### 14.3 Reminders (mechanics)
 

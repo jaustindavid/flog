@@ -80,6 +80,17 @@ See PRD §14.5.)_
 Likely to come up in the first weeks post-v0, in roughly this order
 (smallest first, so quick wins land before bigger commitments).
 
+- `[~]` **OAuth consent-screen logo** — XS. **Promoted to Soon
+  2026-05-31** (owner effort is low). The in-app branding already
+  shipped — favicon set (`favicon.ico` + 16/32 PNGs), PWA icons
+  (`icon-192`/`icon-512`), and `manifest.webmanifest` are live in
+  `public/`. What's left is uploading a logo to the **Google OAuth
+  consent screen** (the sign-in dialog's app icon). Caveat: a
+  consent-screen logo triggers **Google's brand-verification review**
+  (the Route7 rake) — the upload is quick, but the review is
+  Google-paced and may require a privacy-policy URL + domain match
+  (both already in place). Mostly an owner-console task; no code.
+
 - `[ ]` **CSV export of your data** — S. Committed in PRD §1.4 as
   part of "your data is yours." Per-user: export all entries
   authored by you, plus all entries on cars you own. Open
@@ -96,9 +107,11 @@ validate demand, or genuine future-phase structural work.
 
 ### Reports & insights
 
-- `[ ]` **Per-car insight tiles** — S. Max-ever-fuel, best-MPG,
-  worst-MPG, longest interval between fills, average cost/mile.
-  Computed client-side from the fetched entries. v2-ish.
+- `[ ]` **Per-car insight tiles** — S. *Additional* tiles beyond the
+  shipped set (expected range, P95 MPG, longest tank, largest fill =
+  max-ever-fuel — see PRD Flow C): best-MPG, worst-MPG, longest
+  interval between fills, average cost/mile. Computed client-side from
+  the fetched entries. v2-ish.
 - `[ ]` **Suspect-data detector (anomaly flag)** — S, MAY NOT BE
   ACTIONABLE (see "open question" below — file now, decide later).
   Idea from the 2026-05-29 gap-fix discussion. Pure derived check
@@ -209,9 +222,6 @@ validate demand, or genuine future-phase structural work.
 
 ### Product surface / ops
 
-- `[ ]` **Logo + favicon + basic branding** — XS to S. Triggers
-  Google OAuth brand verification (per Route7 rake), so don't
-  ship casually. Probably pairs with custom domain.
 - `[ ]` **Dark mode** — XS to S. Tailwind makes this cheap. Earn
   it via "I'd actually use this on a phone at night at the pump."
   **Latent issue found 2026-05-29**: flog sets NO explicit page
@@ -247,6 +257,28 @@ validate demand, or genuine future-phase structural work.
   regression risk). The "Modal focus-trap + ARIA pass" item applies to
   the new sheet. Sonnet-implementer candidate (mechanical, reuses
   existing components).
+
+- `[ ]` **Don't lose a half-typed fill-up (draft persistence)** — S.
+  **Filed Later 2026-05-31.** Today the log form's fields (`odometer` /
+  `gallons` / `cost`) are ephemeral local `useState` in
+  `LogFillupScreen` — lost the moment the screen unmounts (browser back,
+  the header "Cars" link, and the proposed chip-re-tap navigation in
+  `dispatch/ui-nitpicks.md` #2). Switching car *chips* does NOT lose
+  them (the component stays mounted; the numbers carry over to the newly
+  selected car — see the separate carry-over quirk, possibly a nitpick).
+  **Proposed fix: per-car draft persistence.** Serialize the in-progress
+  entry keyed by carId, restore on mount, clear on successful save, and
+  ignore a draft whose car is no longer in the list. `localStorage`
+  (survives an accidental refresh / tab-close mid-entry at the pump — the
+  loss that actually bites) over `sessionStorage`. Dissolves the problem
+  instead of gating it — no confirm dialog (owner declined that friction
+  2026-05-31), navigation stays free. This is the robust alternative to
+  the "accepted loss" recorded on nitpick #2; if built, it also retires
+  that accepted edge. **Cost/benefit caveat:** it's three numeric fields
+  (~10s to re-enter) against a low-frequency accidental nav — low
+  urgency, hence Later; the real payoff is the refresh/tab-close save,
+  not the chip gesture. Pure client-side; no rules/schema/fetch change.
+  Sonnet candidate.
 
 ### Auth / identity
 
