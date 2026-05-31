@@ -20,7 +20,12 @@ import {
 
 export type UseMaintenanceState =
   | { status: 'loading' }
-  | { status: 'ready'; maintenance: Maintenance[] }
+  // `carId` tags which car this ready data is for — see useEntries for
+  // the rationale. The reminder banner (a binary show/hide element)
+  // compares it to the selected car to avoid a stale-data flash on a
+  // rapid car switch (the hook keeps the prior car's ready data during
+  // the refetch).
+  | { status: 'ready'; maintenance: Maintenance[]; carId: string }
   | { status: 'error'; error: unknown };
 
 export interface UseMaintenanceResult {
@@ -43,7 +48,7 @@ export function useMaintenance(carId: string): UseMaintenanceResult {
       try {
         const maintenance = await listMaintenanceForCar(carId);
         if (epoch !== epochRef.current) return; // stale; discard
-        setState({ status: 'ready', maintenance });
+        setState({ status: 'ready', maintenance, carId });
       } catch (error: unknown) {
         if (epoch !== epochRef.current) return; // stale; discard
         setState({ status: 'error', error });

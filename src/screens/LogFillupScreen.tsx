@@ -222,11 +222,19 @@ export function LogFillupScreen() {
   // max is the true current mileage. null when there are no fuel entries
   // (mileage-due then can't fire; time-due still can).
   //
-  // N2 — only compute when BOTH the entries and maintenance fetches are
-  // ready, the reminder is configured, has a baseline, and is due. An
-  // empty/error carId state (loading/error) must not feed the pure fn.
+  // Only compute when BOTH fetches are ready AND their data is for the
+  // CURRENTLY-selected car. The hooks keep the prior car's ready data
+  // during a refetch (no loading reset — so the tiles don't flash), so a
+  // plain `status === 'ready'` check would feed computeReminder the OLD
+  // car's maintenance/odometer for one render right after a car switch —
+  // briefly mis-firing the banner (the "glitchy flash" bug). The
+  // `carId === selectedCarId` guards suppress the banner until both
+  // streams have re-resolved for the new car.
   const reminderStatus =
-    entriesState.status === 'ready' && maintState.status === 'ready'
+    entriesState.status === 'ready' &&
+    entriesState.carId === selectedCarId &&
+    maintState.status === 'ready' &&
+    maintState.carId === selectedCarId
       ? computeReminder(
           maintState.maintenance,
           reminder,

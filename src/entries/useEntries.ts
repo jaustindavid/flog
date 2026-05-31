@@ -22,7 +22,14 @@ import { listEntriesForCar, type Entry } from './entries';
 
 export type UseEntriesState =
   | { status: 'loading' }
-  | { status: 'ready'; entries: Entry[] }
+  // `carId` tags WHICH car this ready data is for. The hook keeps the
+  // previous car's ready data during a refetch (doFetch(false) — no
+  // loading reset, so dependent UI doesn't flash to a spinner on every
+  // car switch). Consumers that must not act on stale data (e.g. a
+  // binary show/hide element) can compare `carId` to the currently
+  // selected car and ignore a mismatch. Stale-tolerant consumers (the
+  // MPG tiles) can keep ignoring it.
+  | { status: 'ready'; entries: Entry[]; carId: string }
   | { status: 'error'; error: unknown };
 
 export interface UseEntriesResult {
@@ -43,7 +50,7 @@ export function useEntries(carId: string): UseEntriesResult {
       try {
         const entries = await listEntriesForCar(carId);
         if (epoch !== epochRef.current) return; // stale; discard
-        setState({ status: 'ready', entries });
+        setState({ status: 'ready', entries, carId });
       } catch (error: unknown) {
         if (epoch !== epochRef.current) return; // stale; discard
         setState({ status: 'error', error });

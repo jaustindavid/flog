@@ -76,6 +76,39 @@ owner's hands-on feedback.)_
 Likely to come up in the first weeks post-v0, in roughly this order
 (smallest first, so quick wins land before bigger commitments).
 
+- `[~]` **Next-reminder-due display on the car page** — XS to S.
+  **Owner request 2026-05-31.** On the car-detail Maintenance section,
+  when a reminder is configured AND has a baseline (a `resetsReminder`
+  entry exists), show the **projected next due** — the mileage and/or
+  the date it will fire: e.g. "Next oil change: 9,001 mi or by
+  2026-08-31" (whichever-comes-first framing; show both dimensions if
+  both intervals are set, one if only one). This is the forward-looking
+  complement to the Phase-3 banner (which only fires once already
+  due/overdue) — effectively the soft "upcoming" view deferred in
+  PRD §14.3. Reuses Phase-3's derived baseline + intervals +
+  `addMonths`: extend `computeReminder` to also return
+  `dueOdometer`/`dueDate`, or add a sibling `computeNextDue`, and render
+  in the Maintenance section near the reminder config. States: no
+  reminder → nothing; reminder but no baseline → "log a [label] to
+  start"; baseline present → the projection. Additive display only — no
+  rules/schema change. Promote to Next + brief when the owner says go.
+
+- `[~]` **Distance-per-window in the Spend report** — XS to S. **Owner
+  request 2026-05-31** (disambiguated: per-window, beside the Fuel row —
+  NOT per-fill). In the Spend 3×3, show distance driven per window
+  beside the **Fuel** row — e.g. "Fuel: $980 / 3.4k mi" for this-year /
+  prior-year / lifetime (Maintenance + Total rows unchanged). Distance
+  for a window = sum of positive per-fill odometer deltas
+  (`current.odometer − priorFill.odometer`) for fuel entries bucketed by
+  the SAME local-calendar-year-of-`loggedAt` as the spend cost — so cost
+  and distance bucket identically and $/mi falls out. **Include gap
+  deltas** (a missed fill still drove real miles; the odometer span is
+  the truth — do NOT apply the longest-tank 1.5×-median gap exclusion
+  here). Extend `computeSpend` (or add a sibling `computeDistance`) —
+  pure, same bucketing, unit-tested incl. the no-prior-fill (first
+  entry) and year-boundary cases. Additive display; no rules/schema
+  change. Format compact ("3.4k mi"); tune at V2.
+
 - `[ ]` **Optional `note` field on fuel entries** — XS. Per PRD
   §11.2 + M4 design Q3 (2026-05-28). The legacy Google Form had a
   free-text note column at ~1% usage; we dropped it from the v0
