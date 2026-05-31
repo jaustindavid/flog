@@ -1,9 +1,14 @@
 // flog — Copyright © 2026 Austin David — PolyForm Noncommercial 1.0.0
 
 // CarListItem — one Car row in the list. Tap navigates to detail.
+// When the car has a maintenanceReminder, renders a NextDueLine below
+// the name (next-due-display §5.3). NextDueLine is a direct, stable
+// child — no unstable key, no wrapper — so React preserves it across
+// useCars refreshes (S1: no re-fetch churn).
 
 import { Link } from 'react-router';
 import type { Car } from '../cars/cars';
+import { NextDueLine } from './NextDueLine';
 
 interface CarListItemProps {
   car: Car;
@@ -21,6 +26,11 @@ export function CarListItem({ car }: CarListItemProps) {
           <span className="block text-xs text-gray-500 mt-1">
             Shared with {car.shareeEmails.length}
           </span>
+        )}
+        {/* NextDueLine only mounts when a reminder exists — no conditional
+            hooks, no wasted fetch for cars without a reminder. */}
+        {car.maintenanceReminder && (
+          <NextDueLine carId={car.id} reminder={car.maintenanceReminder} />
         )}
       </Link>
     </li>

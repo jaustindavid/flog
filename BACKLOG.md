@@ -62,47 +62,16 @@ promotion time is fine; skipping it is not.
 
 ## Next
 
-Promoted 2026-05-31 — both design-locked, dispatch-ready owner requests
-(smallest first).
+_Empty — both 2026-05-31 owner requests (distance-per-window,
+next-reminder-due display) are implemented and in Done. Next is a valid
+empty state; Soon's CSV export is the next candidate to promote._
 
-- `[~]` **Next-reminder-due display (car-detail + Cars list)** — S.
-  **Owner request 2026-05-31.** Show the **projected next due** for a
-  car's reminder (when configured AND it has a baseline — a
-  `resetsReminder` entry): the mileage and/or date it will fire,
-  whichever-comes-first (both dimensions if both intervals are set, one
-  if only one). The forward-looking complement to the Phase-3 banner
-  (which only fires once already due/overdue) — effectively the soft
-  "upcoming" view deferred in PRD §14.3.
-  **Two surfaces** (owner 2026-05-31):
-  - **(a) Car-detail Maintenance section** — near the reminder config,
-    e.g. "Next oil change: 9,001 mi or by 2026-08-31". Data is already
-    loaded on this screen.
-  - **(b) Each car row on the Cars list (`CarListItem`)** — fill the
-    existing whitespace beside the name + share-count with "next
-    maintenance in X mi / Y days" (a countdown; "overdue by …" if past).
-    The list does NOT currently load per-car maintenance/fuel, so each
-    row fetches its own maintenance (baseline) + fuel (current odometer)
-    — N×2 getDocs, fine at family scale (owner: fetches cheap, prefer
-    elegance). Each row's carId is fixed, so there's NO stale-flash
-    concern (unlike the log-screen banner); just a per-row loading state
-    (render nothing until ready).
-  Shared compute: extend `computeReminder` to also return
-  `dueOdometer`/`dueDate`, or add a sibling `computeNextDue`; reuse
-  Phase-3's derived baseline + intervals + `addMonths`. States per
-  surface: no reminder → nothing; reminder but no baseline → "log a
-  [label] to start" (car-detail) / nothing (list); baseline → the
-  projection. Additive display only — no rules/schema change.
-
-- `[›]` **Distance-per-window in the Spend report** — IMPLEMENTED
-  2026-05-31 (distance on the Spend report's Fuel row, same local-year
-  bucketing as cost so the two align, gap deltas included; +6 unit
-  tests, all gates green). Handoff `dispatch/spend-distance-handoff.md`.
-  **Pending owner V2 + deploy.**
-
-_(Also reserved but not yet ticketed — maintenance-UI tweaks pending
-owner playtest feedback: spend-report placement, modal-vs-route for the
-maintenance form, an optional standing "log maintenance" link on the
-fuel screen, and pre-checking the banner-tap reset box.)_
+_(Reserved but not yet ticketed — maintenance-UI tweaks pending owner
+playtest feedback: spend-report placement, and pre-checking the
+banner-tap reset box. Resolved 2026-05-31: the maintenance form stays a
+**modal** (not a route), and the **banner is the only maintenance
+reference on the fuel screen** — no standing "log maintenance" link.
+See PRD §14.5.)_
 
 ---
 
@@ -442,6 +411,26 @@ validate demand, or genuine future-phase structural work.
 ---
 
 ## Done
+
+- `[x]` **Next-reminder-due display (car-detail + Cars list)** — done
+  2026-05-31 (dispatch `next-due-display`; **pending owner V2 + deploy**).
+  Forward-looking complement to the Phase-3 banner. Extended
+  `computeReminder` ADDITIVELY with `dueOdometer`/`dueDate`/
+  `milesRemaining`/`daysRemaining` (banner reads only the old fields —
+  untouched). Two surfaces: **(a)** car-detail Maintenance section shows
+  absolute next-due ("Next oil change: 9,001 mi or by Aug 31, 2026", or
+  "overdue by …", or "Log a [label] to start" pre-baseline); **(b)** each
+  Cars-list row mounts a `NextDueLine` (only when the car has a reminder)
+  with a relative countdown ("next oil change in 1,200 mi / 45 days").
+  Load-bearing details: DST-safe `daysRemaining` via local-calendar-day
+  diff (spring-forward + fall-back tests under `TZ=America/New_York`);
+  `<= 0` boundary mirrors the banner (never "in 0 mi"); overdue framing
+  shows only the actually-past dimension (no double "overdue");
+  `NextDueLine` is a stable direct child (no re-fetch churn), renders
+  nothing on loading/error. Accepted staleness (S2): list rows are
+  one-shot cached reads, the detail screen is authoritative — no sync
+  built. +14 unit tests (199 total). No rules/schema/write-path change.
+  Handoff `dispatch/next-due-display-handoff.md`.
 
 - `[x]` **Distance-per-window in the Spend report** — done 2026-05-31
   (dispatch `spend-distance`). Extended `computeSpend` to also return

@@ -29,9 +29,36 @@ export interface ReminderStatus {
   overdueMiles: number | null;
   // whole days past the time-due date when time-due (≥ 0); else null.
   overdueDays: number | null;
+
+  // Projection fields (next-due-display, additive — banner ignores these).
+  // baseline.odometer + intervalMiles; null when no mileage interval.
+  dueOdometer: number | null;
+  // addMonths(baseline.date, intervalMonths); null when no months interval
+  // or no baseline date.
+  dueDate: Date | null;
+  // dueOdometer - currentOdometer (negative = overdue); null when
+  // dueOdometer or currentOdometer is null.
+  milesRemaining: number | null;
+  // Local-calendar-day diff (DST-safe, §5.1 S3): floor both instants to
+  // local midnight then divide. Negative = overdue; null when dueDate null.
+  daysRemaining: number | null;
 }
 
 const MS_PER_DAY = 86_400_000;
+
+// localMidnightMs — floor a Date to local midnight (LOCAL getters, never
+// UTC). DST-safe: both operands are floored the same way, so a DST
+// transition inside the window shifts both midnights equally and cancels.
+function localMidnightMs(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// localCalendarDayDiff — signed whole-day difference (b − a) in local
+// calendar days. Positive = b is in the future; negative = b is in the
+// past.
+function localCalendarDayDiff(a: Date, b: Date): number {
+  return Math.round((localMidnightMs(b) - localMidnightMs(a)) / MS_PER_DAY);
+}
 
 // Pick the baseline: the latest-`date` entry with resetsReminder === true,
 // tiebroken by greater odometer. Entries with a null date are eligible
@@ -67,8 +94,22 @@ export function computeReminder(
   // The current instant, injected by the caller (never read inside).
   now: Date
 ): ReminderStatus {
+  const nullProjection = {
+    dueOdometer: null,
+    dueDate: null,
+    milesRemaining: null,
+    daysRemaining: null,
+  };
+
   if (reminder === null) {
-    return { active: false, due: false, label: '', overdueMiles: null, overdueDays: null };
+    return {
+      active: false,
+      due: false,
+      label: '',
+      overdueMiles: null,
+      overdueDays: null,
+      ...nullProjection,
+    };
   }
 
   const baseline = pickBaseline(maintenance);
@@ -79,6 +120,7 @@ export function computeReminder(
       label: reminder.label,
       overdueMiles: null,
       overdueDays: null,
+      ...nullProjection,
     };
   }
 
@@ -86,18 +128,28 @@ export function computeReminder(
   // baseline's odometer. baseline.odometer is always a number (the
   // maintenance type guarantees it). dueOdometer = baseline + interval.
   let overdueMiles: number | null = null;
-  if (reminder.intervalMiles != null && currentOdometer != null) {
-    const dueOdometer = baseline.odometer + reminder.intervalMiles;
-    if (currentOdometer >= dueOdometer) {
-      overdueMiles = currentOdometer - dueOdometer;
+  let dueOdometer: number | null = null;
+  let milesRemaining: number | null = null;
+  if (reminder.intervalMiles != null) {
+    dueOdometer = baseline.odometer + reminder.intervalMiles;
+    if (currentOdometer != null) {
+      milesRemaining = dueOdometer - currentOdometer;
+      if (currentOdometer >= dueOdometer) {
+        overdueMiles = currentOdometer - dueOdometer;
+      }
     }
   }
 
   // Time dimension: needs an interval and a baseline date. addMonths
   // clamps month-end so a Jan-31 baseline yields a valid Feb due date.
   let overdueDays: number | null = null;
+  let dueDate: Date | null = null;
+  let daysRemaining: number | null = null;
   if (reminder.intervalMonths != null && baseline.date != null) {
-    const dueDate = addMonths(baseline.date.toDate(), reminder.intervalMonths);
+    dueDate = addMonths(baseline.date.toDate(), reminder.intervalMonths);
+    // DST-safe local-calendar-day diff (S3): floor both to local midnight,
+    // divide. A positive result = days until due; negative = overdue by.
+    daysRemaining = localCalendarDayDiff(now, dueDate);
     if (now.getTime() >= dueDate.getTime()) {
       // floor absorbs any sub-day DST wobble (both are instants).
       overdueDays = Math.floor((now.getTime() - dueDate.getTime()) / MS_PER_DAY);
@@ -112,5 +164,9 @@ export function computeReminder(
     label: reminder.label,
     overdueMiles,
     overdueDays,
+    dueOdometer,
+    dueDate,
+    milesRemaining,
+    daysRemaining,
   };
 }

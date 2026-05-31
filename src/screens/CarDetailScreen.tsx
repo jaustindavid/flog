@@ -13,6 +13,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { useCar } from '../cars/useCar';
 import { deleteCar } from '../cars/cars';
+import type { MaintenanceReminder } from '../cars/cars';
 import { useEntries } from '../entries/useEntries';
 import {
   avgLastNMpg,
@@ -34,6 +35,84 @@ import { ReminderConfigForm } from '../components/ReminderConfigForm';
 import type { Maintenance } from '../maintenance/maintenance';
 import { computeSpend } from '../maintenance/computeSpend';
 import { SpendReport } from '../components/SpendReport';
+import { computeReminder } from '../maintenance/computeReminder';
+
+// ---------------------------------------------------------------------------
+// NextDueDetail — absolute next-due block inside the Maintenance section.
+// Pure presentation: takes already-loaded state from the parent screen.
+// Shows "Next [label]: N mi or by [date]" when not yet due; "overdue by"
+// copy when past due; "Log a [label] to start" when reminder set but no
+// baseline yet. (brief §5.2)
+// ---------------------------------------------------------------------------
+
+interface NextDueDetailProps {
+  reminder: MaintenanceReminder;
+  maintenance: Maintenance[];
+  currentOdometer: number | null;
+}
+
+// Format a Date using local getters → "Aug 31, 2026" style.
+// Never toISOString() (UTC); consistent with dateField/addMonths convention.
+function formatLocalDate(d: Date): string {
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function NextDueDetail({
+  reminder,
+  maintenance,
+  currentOdometer,
+}: NextDueDetailProps) {
+  const s = computeReminder(maintenance, reminder, currentOdometer, new Date());
+
+  if (!s.active) {
+    // Reminder configured but no baseline entry yet.
+    return (
+      <p className="text-sm text-gray-500">
+        Log a {reminder.label.toLowerCase()} to start the reminder.
+      </p>
+    );
+  }
+
+  if (s.due) {
+    // Build overdue copy: "overdue by N mi / N days" for present dimensions.
+    const parts: string[] = [];
+    if (s.milesRemaining !== null && s.milesRemaining <= 0) {
+      const mi = Math.abs(s.milesRemaining);
+      parts.push(`${mi.toLocaleString()} mi`);
+    }
+    if (s.daysRemaining !== null && s.daysRemaining <= 0) {
+      const d = Math.abs(s.daysRemaining);
+      parts.push(`${d} ${d === 1 ? 'day' : 'days'}`);
+    }
+    const overage = parts.join(' / ');
+    return (
+      <p className="text-sm text-amber-700">
+        {reminder.label} overdue{overage ? ` by ${overage}` : ''}
+      </p>
+    );
+  }
+
+  // Not yet due — show absolute thresholds for present dimensions.
+  const thresholdParts: string[] = [];
+  if (s.dueOdometer !== null) {
+    thresholdParts.push(`${s.dueOdometer.toLocaleString()} mi`);
+  }
+  if (s.dueDate !== null) {
+    thresholdParts.push(`by ${formatLocalDate(s.dueDate)}`);
+  }
+  const thresholds = thresholdParts.join(' or ');
+
+  return (
+    <p className="text-sm text-gray-700">
+      Next {reminder.label.toLowerCase()}:{' '}
+      <span className="font-medium">{thresholds}</span>
+    </p>
+  );
+}
 
 export function CarDetailScreen() {
   const { carId } = useParams<{ carId: string }>();
@@ -149,6 +228,22 @@ export function CarDetailScreen() {
         {isOwner && (
           <ReminderConfigForm car={car} onChanged={refresh} />
         )}
+        {/* Next-due projection — shown when both data sets are ready and
+            a reminder is configured. Uses already-loaded state; no extra
+            fetch. computeReminder is pure (injected now + odometer). */}
+        {car.maintenanceReminder &&
+          maintState.status === 'ready' &&
+          entriesState.status === 'ready' && (
+            <NextDueDetail
+              reminder={car.maintenanceReminder}
+              maintenance={maintState.maintenance}
+              currentOdometer={
+                entriesState.entries.length > 0
+                  ? Math.max(...entriesState.entries.map((e) => e.odometer))
+                  : null
+              }
+            />
+          )}
         {maintState.status === 'loading' && (
           <p className="text-sm text-gray-500">Loading maintenance…</p>
         )}

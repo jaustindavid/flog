@@ -655,7 +655,7 @@ forces revisit.
 
 ---
 
-## 14. Maintenance phase (planned — design locked 2026-05-29)
+## 14. Maintenance phase (shipped 2026-05-31 — design locked 2026-05-29)
 
 A post-v0 phase extending flog from fuel-only to fuel **and**
 maintenance. Settled in a 2026-05-29 design conversation informed by a
@@ -664,6 +664,11 @@ Fuelio, CarExpenses, CarScope, CARFAX). Three sub-features, shippable
 in order: (1) maintenance logging, (2) spend reporting, (3) service
 reminders. The ethos holds: it must not slow the 10-second fuel
 capture, and reminders are a byproduct of logging — no push, no chore.
+
+**Status: all three phases shipped 2026-05-31**, plus two follow-on
+refinements the same day — distance-per-window on the spend report
+(§14.4) and a forward-looking next-due display (§14.3, §14.5). The
+sections below describe the as-built behavior.
 
 **Load-bearing decision — a SEPARATE collection, not a typed unified
 entry.** Maintenance lives in its own subcollection; fuel `entries`
@@ -728,11 +733,26 @@ Due fires on **whichever comes first**. Worked example: oil changed at
 reading ≥ 9,001 mi OR the first date ≥ +3 months. No reminder
 configured, or no `resetsReminder` entry yet → no banner.
 
-**Banner**: the log/fuel screen only, for the selected car — states
-upcoming / due / overdue (with the overage, e.g. "Oil change overdue
-by 400 mi"). **No push** — flog has no service worker; the banner is
-in-app, seen on open. (Push later = service worker + FCM + a server
-trigger; out of scope, a known ceiling.)
+**Banner**: the log/fuel screen only, for the selected car. As built it
+is **binary — due / overdue** (with the overage, e.g. "Oil change
+overdue by 400 mi"); the pre-warning "upcoming" state was deferred. **No
+push** — flog has no service worker; the banner is in-app, seen on open.
+(Push later = service worker + FCM + a server trigger; out of scope, a
+known ceiling.)
+
+**Next-due display** (forward-looking, shipped 2026-05-31): the
+"upcoming" view the banner omits is delivered instead as a quiet
+projection on two surfaces — the car-detail Maintenance section
+(absolute: "Next oil change: 9,001 mi or by Aug 31, 2026") and each
+Cars-list row (relative countdown: "next oil change in 1,200 mi / 45
+days", "overdue by …" when past). Shown only when a reminder is
+configured AND a baseline exists; pre-baseline the car-detail surface
+prompts "Log a [label] to start." Pure derived display (the same
+`computeReminder` baseline + intervals + `addMonths`, extended with
+projection fields) — no rules/schema change. Day math is DST-safe
+(local-calendar-day diff). The Cars-list rows fetch per-row (N×2
+one-shot reads, fine at family scale) and are advisory; the car-detail
+screen is authoritative.
 
 **Reset checkbox**: on the maintenance input screen, "↺ Reset [label]"
 (default OFF). Checking it writes `resetsReminder = true`; because the
@@ -752,6 +772,15 @@ collections (no backend; trivial at family scale). The
 maintenance-vs-fuel split is the one distinction that has a job (tax),
 and the collection split provides it structurally.
 
+**Distance per window** (added 2026-05-31): the Fuel row also shows the
+**miles driven** in each window beneath its cost (a second line, not a
+"/", so the compact "4.6k mi" can't wrap mid-unit) — so fuel spend is
+contextualized by distance and $/mi falls out. Distance = the sum of
+positive per-fill odometer deltas, bucketed by the **same local
+calendar year** as the cost so the two align window-for-window. Unlike
+"longest tank," gap deltas are **included** (the odometer span is the
+truth — you drove those miles). Maintenance + Total rows unchanged.
+
 ### 14.5 Placement & interaction
 
 - **The fuel/home screen stays pure** — no standing maintenance
@@ -759,18 +788,25 @@ and the collection split provides it structurally.
   maintenance. The only maintenance element that can appear is the
   reminder banner (§14.3), shown only when a reminder is configured
   AND due; the banner is **tappable → opens the maintenance form** for
-  that car (so the reset checkbox is right there at the pump). *Open:
-  the owner may later add a standing "log maintenance" link here; left
-  off for now to keep the pump-side capture single-purpose.*
+  that car (so the reset checkbox is right there at the pump).
+  **Decided 2026-05-31: the banner is the ONLY maintenance reference on
+  the fuel screen — no standing "log maintenance" link.** The pump-side
+  capture stays single-purpose; deliberate maintenance logging lives on
+  car-detail.
 - **The car-detail screen is maintenance's home** — a **"Log
   maintenance"** button sits **above the fuel/entries record**,
-  alongside the maintenance history, the 3×3 spend report (§14.4), and
-  the reminder config.
+  alongside the maintenance history, the 3×3 spend report (§14.4), the
+  reminder config, and the next-due projection (§14.3).
+- **The Cars list shows a next-due countdown** — each car row, in the
+  whitespace beside the name + share count, carries a quiet "next
+  [label] in X mi / Y days" line when that car has a reminder with a
+  baseline (§14.3). The list is otherwise unchanged for cars without a
+  reminder.
 - **Two entry points, one form** — the car-detail button (deliberate
   logging) and the tappable banner (reminder-driven "log it now").
 - **Form factor** — the maintenance entry form is a **modal**,
-  consistent with Add-car / Edit-entry / Share. *Revisitable after
-  hands-on click-testing (modal vs a dedicated route).*
+  consistent with Add-car / Edit-entry / Share. **Decided 2026-05-31
+  after hands-on click-testing: modal stays (not a dedicated route).**
 
 ### 14.6 Decisions locked / out of scope
 
@@ -792,6 +828,10 @@ and the collection split provides it structurally.
 - Cross-car spend aggregates remain a separate BACKLOG item.
 
 ### 14.7 Phasing
+
+**All three phases shipped 2026-05-31** (each owner-V2'd and committed),
+followed by the §14.3/§14.4 follow-on refinements. The phase plan below
+is retained as the historical build order.
 
 Phases 2 and 3 each depend only on Phase 1, not on each other — so
 after Phase 1 they're independent and order is flexible. Default order

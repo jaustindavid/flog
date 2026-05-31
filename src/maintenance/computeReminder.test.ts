@@ -223,3 +223,162 @@ describe('computeReminder — baseline selection', () => {
     expect(s.overdueMiles).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Projection fields: dueOdometer / dueDate / milesRemaining / daysRemaining
+// ---------------------------------------------------------------------------
+
+describe('computeReminder — projection: dueOdometer / milesRemaining', () => {
+  it('both-intervals: dueOdometer = baseline + intervalMiles', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    // baseline 6000 + 3000 mi interval → dueOdometer 9000
+    const s = computeReminder(ms, milesAndMonths, 7500, new Date(2026, 1, 1));
+    expect(s.dueOdometer).toBe(9000);
+  });
+
+  it('both-intervals: milesRemaining = dueOdometer - currentOdometer', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    // 9000 - 7500 = 1500 remaining
+    const s = computeReminder(ms, milesAndMonths, 7500, new Date(2026, 1, 1));
+    expect(s.milesRemaining).toBe(1500);
+  });
+
+  it('miles-only: dueOdometer set, dueDate null', () => {
+    const ms = [maint('m1', 5000, dateTs(2026, 0, 1), true)];
+    const s = computeReminder(ms, milesOnly, 6000, new Date(2026, 1, 1));
+    expect(s.dueOdometer).toBe(10000);
+    expect(s.dueDate).toBeNull();
+    expect(s.milesRemaining).toBe(4000);
+    expect(s.daysRemaining).toBeNull();
+  });
+
+  it('months-only: dueOdometer null, milesRemaining null', () => {
+    const ms = [maint('m1', 6000, dateTs(2025, 0, 15), true)];
+    const s = computeReminder(ms, monthsOnly, 6500, new Date(2025, 6, 1));
+    expect(s.dueOdometer).toBeNull();
+    expect(s.milesRemaining).toBeNull();
+  });
+
+  it('overdue: milesRemaining is negative', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    // due at 11000; current 11250 → -250
+    const s = computeReminder(ms, milesOnly, 11250, new Date(2026, 1, 1));
+    expect(s.milesRemaining).toBe(-250);
+    expect(s.overdueMiles).toBe(250); // legacy field still correct
+  });
+
+  it('exactly at threshold: milesRemaining == 0 (S4 boundary)', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    // due at 11000; current 11000 → 0
+    const s = computeReminder(ms, milesOnly, 11000, new Date(2026, 1, 1));
+    expect(s.milesRemaining).toBe(0);
+    expect(s.overdueMiles).toBe(0);
+    expect(s.due).toBe(true);
+  });
+
+  it('null currentOdometer: milesRemaining null, dueOdometer still set', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    const s = computeReminder(ms, milesOnly, null, new Date(2026, 1, 1));
+    expect(s.dueOdometer).toBe(11000);
+    expect(s.milesRemaining).toBeNull();
+  });
+
+  it('no baseline: all projection fields null', () => {
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), false)];
+    const s = computeReminder(ms, milesAndMonths, 10000, new Date(2026, 5, 1));
+    expect(s.active).toBe(false);
+    expect(s.dueOdometer).toBeNull();
+    expect(s.dueDate).toBeNull();
+    expect(s.milesRemaining).toBeNull();
+    expect(s.daysRemaining).toBeNull();
+  });
+});
+
+describe('computeReminder — projection: dueDate / daysRemaining', () => {
+  it('not-yet-due: daysRemaining is positive', () => {
+    // Baseline Jan 15 2026, 3mo → due Apr 15 2026. now = Mar 1 2026 → 45d
+    const reminder3mo: MaintenanceReminder = {
+      label: 'Inspection',
+      intervalMiles: null,
+      intervalMonths: 3,
+    };
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 15), true)];
+    const s = computeReminder(ms, reminder3mo, 6500, new Date(2026, 2, 1));
+    // Mar 1 → Apr 15: 31 (Mar) - 1 + 15 = 45 days
+    expect(s.daysRemaining).toBe(45);
+    expect(s.dueDate).not.toBeNull();
+  });
+
+  it('overdue: daysRemaining is negative', () => {
+    // due Jan 15 2026; now Jan 25 2026 → -10
+    const ms = [maint('m1', 6000, dateTs(2025, 0, 15), true)];
+    const s = computeReminder(ms, monthsOnly, 6500, new Date(2026, 0, 25));
+    expect(s.daysRemaining).toBe(-10);
+    expect(s.overdueDays).toBe(10); // legacy field still correct
+  });
+
+  it('exactly at threshold: daysRemaining == 0 (S4 boundary)', () => {
+    // Baseline Jan 15 2025, 12mo → due Jan 15 2026. now = Jan 15 2026
+    const ms = [maint('m1', 6000, dateTs(2025, 0, 15), true)];
+    const s = computeReminder(ms, monthsOnly, 6500, new Date(2026, 0, 15));
+    expect(s.daysRemaining).toBe(0);
+    expect(s.overdueDays).toBe(0);
+    expect(s.due).toBe(true);
+  });
+
+  it('null baseline date: dueDate null, daysRemaining null', () => {
+    const ms = [maint('m1', 6000, null, true)];
+    const s = computeReminder(ms, monthsOnly, 6500, new Date(2026, 5, 1));
+    expect(s.dueDate).toBeNull();
+    expect(s.daysRemaining).toBeNull();
+  });
+
+  // S3 — DST-safe daysRemaining under TZ=America/New_York.
+  // Spring-forward: 2026-03-08 02:00 clocks jump to 03:00 (23h day).
+  // Baseline: Jan 1 2026 with 3mo interval → due Apr 1 2026 (local midnight).
+  // now = Mar 1 2026 (local midnight). Calendar diff = 31 days remaining.
+  // A naive ms-division would read 30d on a spring-forward day inside the
+  // window because the 23h day makes the window 1h short; localMidnightMs
+  // floors both to local midnight so the DST shift cancels.
+  it('DST-safe: daysRemaining correct across spring-forward (S3)', () => {
+    // Spring-forward: 2026-03-08 02:00 NY clocks jump to 03:00 (23h day).
+    // Baseline Jan 1 2026; 3mo → due Apr 1 2026 (local midnight NY).
+    // now = Mar 1 2026 00:00 NY. Calendar days remaining = 31.
+    // Naive ms-division on the 23h spring-forward day gives wrong result;
+    // local-midnight flooring is DST-immune.
+    const reminder3mo: MaintenanceReminder = {
+      label: 'Inspection',
+      intervalMiles: null,
+      intervalMonths: 3,
+    };
+    const ms = [maint('m1', 6000, dateTs(2026, 0, 1), true)];
+    const s = computeReminder(
+      ms,
+      reminder3mo,
+      6500,
+      new Date(2026, 2, 1) // Mar 1 2026 local midnight
+    );
+    // dueDate is Apr 1 2026 local midnight; Mar 1 → Apr 1 = 31 calendar days
+    expect(s.daysRemaining).toBe(31);
+  });
+
+  // Fall-back: 2025-11-02 02:00 clocks fall back to 01:00 (25h day).
+  // Baseline: Aug 1 2025 with 12mo interval → due Aug 1 2026.
+  // now = Nov 1 2025 (before fall-back). Calendar diff = 273 days remaining.
+  // Naive ms-division would give 273 + rounding error on the 25h day;
+  // local-midnight diff is exact.
+  it('DST-safe: daysRemaining correct across fall-back (S3)', () => {
+    // Baseline Aug 1 2025; 12mo → due Aug 1 2026 local midnight.
+    // now = Nov 1 2025 00:00 NY. Calendar days Aug1→Nov1 = 92 elapsed;
+    // Nov1→Aug1 2026 = 273 remaining.
+    const ms = [maint('m1', 6000, dateTs(2025, 7, 1), true)];
+    const s = computeReminder(
+      ms,
+      monthsOnly,
+      6500,
+      new Date(2025, 10, 1) // Nov 1 2025 local midnight
+    );
+    // Aug 1 2026 - Nov 1 2025 = 273 calendar days
+    expect(s.daysRemaining).toBe(273);
+  });
+});
