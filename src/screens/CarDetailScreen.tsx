@@ -31,6 +31,8 @@ import { useMaintenance } from '../maintenance/useMaintenance';
 import { MaintenanceTable } from '../components/MaintenanceTable';
 import { MaintenanceModal } from '../components/MaintenanceModal';
 import type { Maintenance } from '../maintenance/maintenance';
+import { computeSpend } from '../maintenance/computeSpend';
+import { SpendReport } from '../components/SpendReport';
 
 export function CarDetailScreen() {
   const { carId } = useParams<{ carId: string }>();
@@ -50,6 +52,9 @@ export function CarDetailScreen() {
   // closed; `editingMaint` carries the entry in edit mode.
   const [maintModalOpen, setMaintModalOpen] = useState(false);
   const [editingMaint, setEditingMaint] = useState<Maintenance | null>(null);
+  // Computed once per render; injected into the pure computeSpend fn
+  // so the aggregator never calls new Date() itself (testability).
+  const currentYear = new Date().getFullYear();
 
   if (state.status === 'loading') {
     return (
@@ -109,6 +114,20 @@ export function CarDetailScreen() {
         />
         {isOwner && <ShareForm car={car} onShared={refresh} />}
       </section>
+
+      {entriesState.status === 'ready' && maintState.status === 'ready' && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Spend</h2>
+          <SpendReport
+            report={computeSpend(
+              entriesState.entries,
+              maintState.maintenance,
+              currentYear
+            )}
+            referenceYear={currentYear}
+          />
+        </section>
+      )}
 
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">

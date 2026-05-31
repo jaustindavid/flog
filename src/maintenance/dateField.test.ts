@@ -8,10 +8,12 @@
 // `new Date('2026-01-01')` (UTC) or `toISOString().slice(0,10)` (UTC)
 // would shift the day back to 2025-12-31 in a negative-offset zone.
 //
-// The whole suite is run by the repo under a pinned non-UTC TZ
-// (see the npm test invocation note in the handoff). The helper is
-// tz-correct BY CONSTRUCTION (local components only), so these pass
-// regardless of TZ — but the year-boundary case is the canary.
+// The `npm test` script pins `TZ=America/New_York` (a negative-offset
+// zone) so the canary actually bites: under UTC, `getFullYear()` and
+// the buggy `toISOString()` agree, making a year-boundary test vacuous;
+// under a real offset they diverge. The helper is tz-correct BY
+// CONSTRUCTION (local components only), so these pass regardless of TZ —
+// the pinned non-UTC runner is what makes the assertion meaningful.
 
 import { Timestamp } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';

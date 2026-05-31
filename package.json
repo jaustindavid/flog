@@ -18,7 +18,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\" \"#.firebase\" \"#dispatch/M1-g-outputs.md\"",
-    "test": "vitest run",
+    "test": "TZ=America/New_York vitest run",
     "test:rules": "firebase --project=flog-rules-test emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
     "import:history": "node scripts/import-history.mjs"
   },

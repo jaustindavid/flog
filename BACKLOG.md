@@ -66,25 +66,19 @@ promotion time is fine; skipping it is not.
 (design conversation + a deep-research survey); full spec **PRD §14**.
 Key shape: a SEPARATE `maintenance` collection (not a `type` on Entry —
 keeps the fuel/MPG stream pure), no categories, a derived reminder
-baseline, and the fuel screen stays pure. Three sequenced dispatches —
-2 and 3 depend only on 1, so after Phase 1 they're independent; do 2
-first (cheaper, lower-risk).
+baseline, and the fuel screen stays pure. **Phase 1 shipped 2026-05-31 (→ Done);
+Phase 2 implemented (pending owner V2); Phase 3 next.**
 
-- `[›]` **Maint. Phase 1 — logging** — M. New `cars/{id}/maintenance`
-  collection + P1-style rules + a log-maintenance modal from a button
-  on the car-detail screen (fuel screen untouched). Phase-1 modal
-  fields: date / odometer / cost / note (the `resetsReminder` checkbox
-  arrives in Phase 3). Spec PRD §14.1–14.2, §14.5.
-  **IMPLEMENTED 2026-05-31** (full CRUD; rules helper-lift to car scope;
-  local-midnight date bridge): all gates green, +23 unit / +32 rules
-  tests, existing 65 rules-tests unchanged. Handoff at
-  `dispatch/maintenance-phase-1-handoff.md`. **Pending owner V2 +
-  `deploy:dev` (rules must be live to test).** → **Phase 2 is now the
-  immediate next dispatch.**
-- `[~]` **Maint. Phase 2 — spend reporting** — S. The 3×3
+- `[›]` **Maint. Phase 2 — spend reporting** — S. The 3×3
   (Maintenance/Fuel/Total × This-year/Prior-year/Lifetime), calendar
   windows, on car-detail; client-side aggregation over both
-  collections. Spec PRD §14.4.
+  collections. Spec PRD §14.4. **IMPLEMENTED 2026-05-31**
+  (`computeSpend` pure fn, local-year bucketing, `SpendReport` 3×3;
+  +7 unit tests, all gates green; reuses loaded state, no new fetch).
+  Also pinned `TZ=America/New_York` on the unit-test runner so the
+  year-boundary (tax) bucketing test is meaningful, not vacuous.
+  Handoff `dispatch/maintenance-phase-2-handoff.md`. **Pending owner
+  V2 + deploy.**
 - `[~]` **Maint. Phase 3 — reminders** — M. Per-car reminder config +
   the derived banner on the fuel screen + the reset checkbox added to
   the maintenance modal. Spec PRD §14.3, §14.5.
@@ -439,6 +433,18 @@ validate demand, or genuine future-phase structural work.
 
 ## Done
 
+- `[x]` **Maintenance phase 1 — logging** — done 2026-05-31 (owner V2
+  passed). New `cars/{id}/maintenance` subcollection, SEPARATE from fuel
+  `entries` (keeps the MPG stream pure), with full CRUD: a create-or-
+  edit modal + per-car list on the car-detail screen (above Fill-ups),
+  P1-style validation rules, a backdatable local-midnight `date`
+  (tz-safe bridge), and a car-delete cascade. Rules refactor: lifted
+  `parentCar`/`canReadParent`/`canMutate` to `cars/{carId}` scope so
+  entries + maintenance share them (existing 65 rules-tests unchanged).
+  +23 unit / +32 rules tests; all gates green. `resetsReminder` written
+  (default false, no UI) so Phase 3 drops in with no migration. Spec
+  PRD §14; handoff `dispatch/maintenance-phase-1-handoff.md`. (Owner
+  deploys to prod on their cadence.)
 - `[x]` **Security hardening — rules validation, HTTP headers,
   offline-cache clear (review P1/P2/P4)** — done 2026-05-29 from the
   comprehensive security review.
