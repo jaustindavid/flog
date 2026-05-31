@@ -37,10 +37,14 @@ import { useEntries } from '../entries/useEntries';
 import { validateCost } from '../entries/validateCost';
 import { validateGallons } from '../entries/validateGallons';
 import { validateOdometer } from '../entries/validateOdometer';
+import { useMaintenance } from '../maintenance/useMaintenance';
+import { computeReminder } from '../maintenance/computeReminder';
 import { getMruCarId, setMruCarId } from '../lib/mru';
 import { CarPickerChips } from '../components/CarPickerChips';
+import { MaintenanceModal } from '../components/MaintenanceModal';
 import { MpgTile } from '../components/MpgTile';
 import { NumericField } from '../components/NumericField';
+import { ReminderBanner } from '../components/ReminderBanner';
 import { StatRow } from '../components/StatRow';
 import { Toast, type ToastState } from '../components/Toast';
 
@@ -57,6 +61,15 @@ export function LogFillupScreen() {
   const { state: entriesState, refresh: refreshEntries } = useEntries(
     selectedCarId ?? ''
   );
+  // Maintenance fetch for the selected car — drives the service-reminder
+  // banner. Same empty-carId → error-state convention as useEntries
+  // above; the banner's N2 ready-gate hides cleanly in that case.
+  const { state: maintState, refresh: refreshMaint } = useMaintenance(
+    selectedCarId ?? ''
+  );
+  // Reminder modal (Phase 3): the banner tap opens the maintenance modal
+  // in CREATE mode so the user logs the service that resets the clock.
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
   const [odometer, setOdometer] = useState('');
   const [gallons, setGallons] = useState('');
   const [cost, setCost] = useState('');
@@ -199,6 +212,32 @@ export function LogFillupScreen() {
     );
   }
 
+  const selectedCar = state.cars.find((c) => c.id === selectedCarId) ?? null;
+  const reminder = selectedCar?.maintenanceReminder ?? null;
+
+  // S2 — currentOdometer = the MAX odometer across fuel entries, NOT
+  // entries[0] (newest-LOGGED). Entries sort by loggedAt desc, so a
+  // backdated/corrected fill could leave the newest-logged entry with a
+  // lower odometer and UNDER-fire the banner. Odometer is monotonic, so
+  // max is the true current mileage. null when there are no fuel entries
+  // (mileage-due then can't fire; time-due still can).
+  //
+  // N2 — only compute when BOTH the entries and maintenance fetches are
+  // ready, the reminder is configured, has a baseline, and is due. An
+  // empty/error carId state (loading/error) must not feed the pure fn.
+  const reminderStatus =
+    entriesState.status === 'ready' && maintState.status === 'ready'
+      ? computeReminder(
+          maintState.maintenance,
+          reminder,
+          entriesState.entries.length > 0
+            ? Math.max(...entriesState.entries.map((e) => e.odometer))
+            : null,
+          new Date() // the screen reads the clock and injects it
+        )
+      : null;
+  const showBanner = reminderStatus?.active && reminderStatus.due;
+
   return (
     <main className="p-6 max-w-md mx-auto w-full flex flex-col gap-6">
       <h1 className="sr-only">Log a fill-up</h1>
@@ -211,6 +250,13 @@ export function LogFillupScreen() {
           setMruCarId(id);
         }}
       />
+
+      {showBanner && reminderStatus && (
+        <ReminderBanner
+          status={reminderStatus}
+          onTap={() => setReminderModalOpen(true)}
+        />
+      )}
 
       <NumericField
         label="Odometer (mi)"
@@ -328,6 +374,25 @@ export function LogFillupScreen() {
           </section>
         );
       })()}
+
+      {reminderModalOpen && selectedCarId && (
+        <MaintenanceModal
+          carId={selectedCarId}
+          loggedByUid={user?.uid ?? ''}
+          reminderLabel={reminder?.label ?? null}
+          onClose={() => setReminderModalOpen(false)}
+          onSaved={() => {
+            setReminderModalOpen(false);
+            // The logged service may be the new baseline → refetch so the
+            // banner re-evaluates (and clears until the next interval).
+            void refreshMaint();
+          }}
+          onDeleted={() => {
+            setReminderModalOpen(false);
+            void refreshMaint();
+          }}
+        />
+      )}
     </main>
   );
 }

@@ -36,12 +36,27 @@ import { firestore } from '../firebase/firestore';
 import { deleteEntriesForCar } from '../entries/entries';
 import { deleteMaintenanceForCar } from '../maintenance/maintenance';
 
+// Per-car service reminder (Phase 3, PRD §14.3). null when unset; when
+// set, at least one of intervalMiles / intervalMonths is non-null (the
+// "≥1 interval" invariant, enforced both client-side in the config form
+// and server-side in the Car update rule). The "last done" baseline is
+// NOT stored here — it is DERIVED at read time from the most-recent
+// maintenance entry flagged resetsReminder (see computeReminder.ts).
+export interface MaintenanceReminder {
+  label: string;
+  intervalMiles: number | null;
+  intervalMonths: number | null;
+}
+
 export interface Car {
   id: string;
   name: string;
   ownerUid: string;
   shareeEmails: string[];
   createdAt: Timestamp | null;
+  // Phase 3; null on cars created before reminders existed and on cars
+  // whose owner has not set one. toCar coalesces a missing field to null.
+  maintenanceReminder: MaintenanceReminder | null;
 }
 
 interface CarDocData {
@@ -49,6 +64,7 @@ interface CarDocData {
   ownerUid: string;
   shareeEmails: string[];
   createdAt: Timestamp | null;
+  maintenanceReminder?: MaintenanceReminder | null;
 }
 
 function toCar(id: string, data: CarDocData): Car {
@@ -58,6 +74,9 @@ function toCar(id: string, data: CarDocData): Car {
     ownerUid: data.ownerUid,
     shareeEmails: Array.isArray(data.shareeEmails) ? data.shareeEmails : [],
     createdAt: data.createdAt ?? null,
+    // Defensive coalesce: a legacy car doc has no maintenanceReminder
+    // field; render it as "no reminder" rather than undefined.
+    maintenanceReminder: data.maintenanceReminder ?? null,
   };
 }
 
@@ -86,6 +105,21 @@ export async function createCar(
 
 export async function renameCar(carId: string, name: string): Promise<void> {
   await updateDoc(doc(firestore, 'cars', carId), { name });
+}
+
+export async function setMaintenanceReminder(
+  carId: string,
+  reminder: MaintenanceReminder | null
+): Promise<void> {
+  // Single write path for the per-car reminder config (PRD §14.3).
+  // Pass a reminder map to set/replace it, or null to clear it. The
+  // caller (the config form) guarantees the ≥1-interval invariant; the
+  // Car update rule re-checks it. Mirrors renameCar's single-field
+  // updateDoc — only maintenanceReminder is in the diff's affectedKeys,
+  // so ownerUid/createdAt/name/shareeEmails stay untouched.
+  await updateDoc(doc(firestore, 'cars', carId), {
+    maintenanceReminder: reminder,
+  });
 }
 
 export async function deleteCar(carId: string): Promise<void> {

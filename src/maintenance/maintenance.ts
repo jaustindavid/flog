@@ -86,7 +86,14 @@ export async function createMaintenance(
   // `date` is a concrete Timestamp the caller built from the date
   // input (dateField.dateInputToTimestamp), NOT a sentinel — SF2.
   data: { date: Timestamp; odometer: number; cost: number; note: string },
-  loggedByUid: string
+  loggedByUid: string,
+  // Phase 3 (S4): OPTIONAL, defaults false. The banner-tap opens the
+  // modal in CREATE mode, so create must be able to set the reset flag
+  // (it baselines the reminder). Defaulting false preserves every
+  // existing caller that omits it. The create rule already permits the
+  // field (Phase 1 pinned it into the field set), so this is purely the
+  // client write path.
+  resetsReminder = false
 ): Promise<string> {
   const ref = await addDoc(
     collection(firestore, 'cars', carId, 'maintenance'),
@@ -96,7 +103,7 @@ export async function createMaintenance(
       odometer: data.odometer,
       cost: data.cost,
       note: data.note,
-      resetsReminder: false, // Phase 1: always false, no UI (PRD §14.3)
+      resetsReminder,
       loggedAt: serverTimestamp(), // never a client clock (audit)
     }
   );
@@ -106,18 +113,25 @@ export async function createMaintenance(
 export async function updateMaintenance(
   carId: string,
   maintId: string,
-  // Writes ONLY these four fields — never loggedByUid / loggedAt /
-  // resetsReminder. The maintenance `update` rule's hasOnly guard makes
-  // loggedByUid + loggedAt immutable; resetsReminder is IN the rule's
-  // editable set (Phase 3) but the Phase-1 modal never sends it, so the
-  // diff's affectedKeys is always exactly these four.
-  fields: { date: Timestamp; odometer: number; cost: number; note: string }
+  // Writes these five fields — never loggedByUid / loggedAt. The
+  // maintenance `update` rule's hasOnly guard makes loggedByUid +
+  // loggedAt immutable; resetsReminder is IN the rule's editable set
+  // (already permitted since Phase 1) and Phase 3's modal now sends it,
+  // so the diff's affectedKeys is exactly these five.
+  fields: {
+    date: Timestamp;
+    odometer: number;
+    cost: number;
+    note: string;
+    resetsReminder: boolean;
+  }
 ): Promise<void> {
   await updateDoc(doc(firestore, 'cars', carId, 'maintenance', maintId), {
     date: fields.date,
     odometer: fields.odometer,
     cost: fields.cost,
     note: fields.note,
+    resetsReminder: fields.resetsReminder,
   });
 }
 

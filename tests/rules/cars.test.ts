@@ -481,3 +481,204 @@ describe('cars — field/shape validation (P1 hardening 2026-05-29)', () => {
     );
   });
 });
+
+describe('cars — maintenanceReminder shape (Phase 3, §5.3)', () => {
+  // The Car-update rule extends affectedKeys hasOnly to include
+  // maintenanceReminder and validates the shape: a map with only
+  // label/intervalMiles/intervalMonths, label is string, each interval
+  // null OR a positive number in range (`is number`, NOT `is int` — the
+  // SF4/B1 convention), and ≥1 interval non-null (S1). Absent/null are
+  // also valid (rename/share/clear). Owner-only is reused from the base
+  // update rule (the existing 'sharee cannot update car' covers authz).
+  function seedReminderCar(carId: string) {
+    return seedCar(carId, {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [],
+    });
+  }
+
+  function aliceCtx() {
+    return env.authenticatedContext(aliceAuth.uid, { email: aliceAuth.email });
+  }
+
+  it('owner sets a valid miles-only reminder', async () => {
+    await seedReminderCar('car-r');
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('owner sets a valid months-only reminder', async () => {
+    await seedReminderCar('car-r');
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Inspection',
+          intervalMiles: null,
+          intervalMonths: 12,
+        },
+      })
+    );
+  });
+
+  it('owner sets a valid both-intervals reminder', async () => {
+    await seedReminderCar('car-r');
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000,
+          intervalMonths: 3,
+        },
+      })
+    );
+  });
+
+  it('owner clears the reminder (null)', async () => {
+    await seedReminderCar('car-r');
+    // Seed a reminder first (rules disabled) so clearing is a real diff.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000,
+          intervalMonths: null,
+        },
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: null,
+      })
+    );
+  });
+
+  it('rename-only write (no reminder key) still succeeds — absence branch', async () => {
+    await seedReminderCar('car-r');
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        name: 'Renamed',
+      })
+    );
+  });
+
+  it('rejects a reminder with an extra key', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000,
+          intervalMonths: null,
+          surprise: 1,
+        },
+      })
+    );
+  });
+
+  it('rejects a non-string label', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 42,
+          intervalMiles: 3000,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('rejects both intervals null (≥1 required, S1)', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: null,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('rejects a non-number interval (string)', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: '3000',
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('rejects a non-positive interval (zero)', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 0,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('rejects an out-of-range interval (intervalMonths too large)', async () => {
+    await seedReminderCar('car-r');
+    await assertFails(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: null,
+          intervalMonths: 5000, // >= 1200 ceiling
+        },
+      })
+    );
+  });
+
+  it('accepts a whole-number interval encoded as a double (is number, not is int)', async () => {
+    // The SF4/B1 case: the SDK may encode 3000 as a double. `is number`
+    // must accept it; `is int` would have rejected. 3000.0 === 3000 in
+    // JS so this is the realistic encoding the convention guards.
+    await seedReminderCar('car-r');
+    await assertSucceeds(
+      updateDoc(doc(aliceCtx().firestore(), 'cars', 'car-r'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000.0,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+
+  it('sharee cannot set a reminder (owner-only update preserved)', async () => {
+    await seedCar('car-shared', {
+      name: 'Minivan',
+      ownerUid: ALICE_UID,
+      shareeEmails: [BOB_EMAIL],
+    });
+    const ctx = env.authenticatedContext(bobAuth.uid, { email: bobAuth.email });
+    await assertFails(
+      updateDoc(doc(ctx.firestore(), 'cars', 'car-shared'), {
+        maintenanceReminder: {
+          label: 'Oil change',
+          intervalMiles: 3000,
+          intervalMonths: null,
+        },
+      })
+    );
+  });
+});

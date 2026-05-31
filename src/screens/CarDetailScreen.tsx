@@ -30,6 +30,7 @@ import type { Entry } from '../entries/entries';
 import { useMaintenance } from '../maintenance/useMaintenance';
 import { MaintenanceTable } from '../components/MaintenanceTable';
 import { MaintenanceModal } from '../components/MaintenanceModal';
+import { ReminderConfigForm } from '../components/ReminderConfigForm';
 import type { Maintenance } from '../maintenance/maintenance';
 import { computeSpend } from '../maintenance/computeSpend';
 import { SpendReport } from '../components/SpendReport';
@@ -143,6 +144,11 @@ export function CarDetailScreen() {
             Log maintenance
           </button>
         </div>
+        {/* Service-reminder config (Phase 3) — owner only. Sharees see the
+            maintenance log + reset checkbox but not the reminder setup. */}
+        {isOwner && (
+          <ReminderConfigForm car={car} onChanged={refresh} />
+        )}
         {maintState.status === 'loading' && (
           <p className="text-sm text-gray-500">Loading maintenance…</p>
         )}
@@ -252,6 +258,7 @@ export function CarDetailScreen() {
           carId={carId ?? ''}
           entry={editingMaint ?? undefined}
           loggedByUid={user?.uid ?? ''}
+          reminderLabel={car.maintenanceReminder?.label ?? null}
           onClose={() => {
             setMaintModalOpen(false);
             setEditingMaint(null);

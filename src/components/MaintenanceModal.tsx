@@ -13,8 +13,10 @@
 //
 // Fields: date (`<input type="date">`, required), odometer (NumericField,
 // required), cost (NumericField, required), note (text input, required).
-// `resetsReminder` is NOT touched here — it's written `false` by
-// createMaintenance and never sent by updateMaintenance (Phase 3 UI).
+// Phase 3: when the car has a reminder (reminderLabel passed), a
+// "↺ Reset [label]" checkbox appears (default OFF) — checking it
+// baselines the reminder. resetsReminder is written on BOTH create and
+// edit; with no reminder the checkbox is hidden and false is sent.
 //
 // Validation reuses the fuel numeric validators (validateOdometer /
 // validateCost) so the client integer/decimal posture matches the
@@ -45,6 +47,9 @@ interface MaintenanceModalProps {
   // No entry → create mode; entry present → edit mode.
   entry?: Maintenance;
   loggedByUid: string;
+  // Phase 3: the car's reminder label when one is configured, else null.
+  // Drives whether the reset checkbox renders ("↺ Reset [label]").
+  reminderLabel?: string | null;
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
@@ -54,11 +59,14 @@ export function MaintenanceModal({
   carId,
   entry,
   loggedByUid,
+  reminderLabel,
   onClose,
   onSaved,
   onDeleted,
 }: MaintenanceModalProps) {
   const isEdit = entry !== undefined;
+  const hasReminder =
+    typeof reminderLabel === 'string' && reminderLabel.length > 0;
 
   // Pre-fill in edit mode; sensible blanks (date=today) in create mode.
   // Cost shows 2 dp (dollars); odometer is an integer; the date pre-fill
@@ -71,6 +79,13 @@ export function MaintenanceModal({
   );
   const [cost, setCost] = useState(entry ? entry.cost.toFixed(2) : '');
   const [note, setNote] = useState(entry ? entry.note : '');
+  // Reset checkbox (Phase 3): default OFF in create mode (Decision #3 —
+  // even the banner-tap create flow defaults OFF); in edit mode pre-fill
+  // the entry's stored resetsReminder so editing a baseline entry keeps
+  // it a baseline unless the user unchecks.
+  const [resetsReminder, setResetsReminder] = useState(
+    entry?.resetsReminder ?? false
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -131,10 +146,17 @@ export function MaintenanceModal({
         cost: costResult.value!,
         note: noteResult.value!,
       };
+      // Only send a true reset when the car actually has a reminder —
+      // hasReminder gates the checkbox, so without one resetsReminder
+      // stays false regardless of any stale state.
+      const reset = hasReminder ? resetsReminder : false;
       if (isEdit) {
-        await updateMaintenance(carId, entry.id, fields);
+        await updateMaintenance(carId, entry.id, {
+          ...fields,
+          resetsReminder: reset,
+        });
       } else {
-        await createMaintenance(carId, fields, loggedByUid);
+        await createMaintenance(carId, fields, loggedByUid, reset);
       }
       onSaved();
     } catch (err: unknown) {
@@ -256,6 +278,21 @@ export function MaintenanceModal({
               </p>
             )}
           </div>
+
+          {hasReminder && (
+            <label className="flex items-center gap-2 text-sm text-gray-800 min-h-[44px] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resetsReminder}
+                onChange={(e) => {
+                  setResetsReminder(e.target.checked);
+                  clearError();
+                }}
+                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span>↺ Reset {reminderLabel}</span>
+            </label>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

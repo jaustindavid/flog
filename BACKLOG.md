@@ -66,8 +66,11 @@ promotion time is fine; skipping it is not.
 (design conversation + a deep-research survey); full spec **PRD §14**.
 Key shape: a SEPARATE `maintenance` collection (not a `type` on Entry —
 keeps the fuel/MPG stream pure), no categories, a derived reminder
-baseline, and the fuel screen stays pure. **Phase 1 shipped 2026-05-31 (→ Done);
-Phase 2 implemented (pending owner V2); Phase 3 next.**
+baseline, and the fuel screen stays pure.
+
+**Phase 1 shipped (→ Done); Phases 2 and 3 implemented 2026-05-31,
+pending owner V2 + deploy.** Once V2'd, the whole Maintenance phase is
+done.
 
 - `[›]` **Maint. Phase 2 — spend reporting** — S. The 3×3
   (Maintenance/Fuel/Total × This-year/Prior-year/Lifetime), calendar
@@ -79,9 +82,15 @@ Phase 2 implemented (pending owner V2); Phase 3 next.**
   year-boundary (tax) bucketing test is meaningful, not vacuous.
   Handoff `dispatch/maintenance-phase-2-handoff.md`. **Pending owner
   V2 + deploy.**
-- `[~]` **Maint. Phase 3 — reminders** — M. Per-car reminder config +
+- `[›]` **Maint. Phase 3 — reminders** — M. Per-car reminder config +
   the derived banner on the fuel screen + the reset checkbox added to
-  the maintenance modal. Spec PRD §14.3, §14.5.
+  the maintenance modal. Spec PRD §14.3, §14.5. **IMPLEMENTED
+  2026-05-31** (Car `maintenanceReminder` field + update-rule shape
+  validation [`is number`, ≥1 interval]; derived baseline; clamping
+  `addMonths`; `computeReminder`; banner on the log screen; +34 unit /
+  +13 rules tests, existing suites green). Handoff
+  `dispatch/maintenance-phase-3-handoff.md`. **Pending owner V2 +
+  `deploy:dev` (rules must be live).**
 
 ---
 

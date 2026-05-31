@@ -117,17 +117,49 @@ service cloud.firestore {
                        && request.resource.data.ownerUid == request.auth.uid
                        && validCarCreate(request.resource.data);
 
-      // update: owner only; only name + shareeEmails may change
-      // (hasOnly makes ownerUid AND createdAt immutable automatically —
-      // they're not in the allowed set). Types re-checked on the
+      // update: owner only; only name + shareeEmails +
+      // maintenanceReminder may change (hasOnly on the diff's
+      // affectedKeys makes ownerUid AND createdAt immutable automatically
+      // — they're not in the allowed set). Types re-checked on the
       // resulting doc so a rename/share can't write garbage.
+      //
+      // maintenanceReminder (Phase 3, PRD §14.3): absent on a rename/
+      // share write (the !in branch no-ops — existing tests stay green),
+      // null when clearing, or a map. SF4/B1 — intervals are validated
+      // `is number` + range, NEVER `is int`: the JS SDK may encode a
+      // whole number (e.g. intervalMiles: 3000) as a double, so `is int`
+      // would reject a valid write at runtime (the same convention as
+      // validMaintNumbers / validEntryNumbers). S1 — at least one
+      // interval must be non-null (the final clause), mirroring the
+      // file's pin-the-shape posture.
       allow update: if request.auth != null
                        && resource.data.ownerUid == request.auth.uid
                        && request.resource.data.diff(resource.data)
                             .affectedKeys()
-                            .hasOnly(['name', 'shareeEmails'])
+                            .hasOnly(['name', 'shareeEmails',
+                                      'maintenanceReminder'])
                        && request.resource.data.name is string
-                       && request.resource.data.shareeEmails is list;
+                       && request.resource.data.shareeEmails is list
+                       && (
+                            !('maintenanceReminder' in request.resource.data)
+                         || request.resource.data.maintenanceReminder == null
+                         || (
+                              request.resource.data.maintenanceReminder.keys()
+                                .hasOnly(['label', 'intervalMiles',
+                                          'intervalMonths'])
+                           && request.resource.data.maintenanceReminder.label is string
+                           && (request.resource.data.maintenanceReminder.intervalMiles == null
+                               || (request.resource.data.maintenanceReminder.intervalMiles is number
+                                   && request.resource.data.maintenanceReminder.intervalMiles > 0
+                                   && request.resource.data.maintenanceReminder.intervalMiles < 100000000))
+                           && (request.resource.data.maintenanceReminder.intervalMonths == null
+                               || (request.resource.data.maintenanceReminder.intervalMonths is number
+                                   && request.resource.data.maintenanceReminder.intervalMonths > 0
+                                   && request.resource.data.maintenanceReminder.intervalMonths < 1200))
+                           && (request.resource.data.maintenanceReminder.intervalMiles != null
+                               || request.resource.data.maintenanceReminder.intervalMonths != null)
+                         )
+                       );
 
       allow delete: if request.auth != null
                        && resource.data.ownerUid == request.auth.uid;
