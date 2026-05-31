@@ -33,6 +33,12 @@ if you'd like a free fuel logger of your own.
   computed automatically from your fill-ups.
 - **Per-car stats** — expected driving range, P95 MPG, longest tank,
   and largest fill, derived from your fill-up history.
+- **Track maintenance** — log services (oil changes, tires, and the
+  like) alongside fuel, with a per-car spend report: maintenance vs
+  fuel, this year / last year / lifetime, plus miles driven per year.
+- **Service reminders** — set a mileage and/or time interval per car;
+  flog shows the next service due on the car and on the Cars list, and
+  a banner at the pump when one is overdue.
 - **Multiple cars, shared by email** — own your cars; share one with a
   family member by their email and they can log fills too.
 - **Edit or delete** entries when someone fat-fingers an odometer.
@@ -72,7 +78,8 @@ See [`PRD.md`](PRD.md) for the full product spec and data model, and
 
 v0 is live in production at flog.austindavid.com: Google sign-in with
 allowlist, cars + share-by-email, mobile-first fill-up logging, per-car
-MPG and stats, edit/delete, and an installable offline-capable app. The
+MPG and stats, maintenance logging with spend reporting and service
+reminders, edit/delete, and an installable offline-capable app. The
 family is onboarded and historical fill-ups are imported; development
 continues from [`BACKLOG.md`](BACKLOG.md).
 
@@ -85,6 +92,7 @@ npm run emulators    # Firebase Auth + Firestore emulators (rules work)
 npm test             # unit tests
 npm run test:rules   # Firestore security-rules tests (emulator-backed)
 npm run lint         # ESLint
+npm run lint:md      # markdownlint (the docs are a first-class gate)
 npm run build:dev    # production build (dev config)
 ```
 
