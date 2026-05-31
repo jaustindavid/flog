@@ -14,12 +14,13 @@ import { computeSpend } from './computeSpend';
 function fuel(
   id: string,
   cost: number,
-  loggedAt: Timestamp | null
+  loggedAt: Timestamp | null,
+  odometer = 0
 ): Entry {
   return {
     id,
     loggedByUid: 'uid',
-    odometer: 0,
+    odometer,
     gallons: 10,
     cost,
     loggedAt,
@@ -197,5 +198,147 @@ describe('computeSpend — multi-year bucketing', () => {
     expect(r.lifetime.fuel).toBeCloseTo(60, 6);        // 30+20+10
     expect(r.lifetime.maintenance).toBeCloseTo(150, 6); // 100+50
     expect(r.lifetime.total).toBeCloseTo(210, 6);       // 60+150
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fuelMiles — empty inputs → all-zero miles
+// ---------------------------------------------------------------------------
+describe('computeSpend fuelMiles — empty inputs', () => {
+  it('returns zero fuelMiles when fuel array is empty', () => {
+    const r = computeSpend([], [], 2026);
+    expect(r.fuelMiles).toEqual({ thisYear: 0, priorYear: 0, lifetime: 0 });
+  });
+
+  it('returns zero fuelMiles for a single entry (no prior)', () => {
+    const ts = Timestamp.fromDate(new Date(2026, 0, 15));
+    const r = computeSpend([fuel('f1', 40, ts, 50000)], [], 2026);
+    expect(r.fuelMiles).toEqual({ thisYear: 0, priorYear: 0, lifetime: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fuelMiles — cross-window (deltas bucket to the correct year)
+//
+// Three entries newest-first:
+//   f1: odo 52000, loggedAt = Jun 1, 2026  → delta vs f2 = 2000 → thisYear
+//   f2: odo 50000, loggedAt = Jun 1, 2025  → delta vs f3 = 1500 → priorYear
+//   f3: odo 48500, loggedAt = Jun 1, 2024  → oldest, no prior → 0
+//
+// Lifetime = 2000 + 1500 = 3500.
+// ---------------------------------------------------------------------------
+describe('computeSpend fuelMiles — cross-window bucketing', () => {
+  const ts2026 = Timestamp.fromDate(new Date(2026, 5, 1));
+  const ts2025 = Timestamp.fromDate(new Date(2025, 5, 1));
+  const ts2024 = Timestamp.fromDate(new Date(2024, 5, 1));
+
+  it('buckets deltas by the newer fill\'s local year', () => {
+    const r = computeSpend(
+      [
+        fuel('f1', 30, ts2026, 52000),
+        fuel('f2', 20, ts2025, 50000),
+        fuel('f3', 10, ts2024, 48500),
+      ],
+      [],
+      2026
+    );
+    expect(r.fuelMiles.thisYear).toBe(2000);    // f1−f2
+    expect(r.fuelMiles.priorYear).toBe(1500);   // f2−f3
+    expect(r.fuelMiles.lifetime).toBe(3500);    // 2000+1500
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fuelMiles — gap delta INCLUDED (AC-T: the gap case)
+//
+// A missed fill means one delta spans two tanks but is the real distance
+// driven. The test asserts the big delta is INCLUDED, not excluded.
+//
+// Entries newest-first:
+//   f1: odo 60000, Jun 2026 → delta vs f2 = 500  → normal fill
+//   f2: odo 59500, Jun 2026 → delta vs f3 = 3000 → gap (missed fill)
+//   f3: odo 56500, Jun 2026 → oldest, no prior → 0
+//
+// Lifetime = 500 + 3000 = 3500. The gap delta 3000 must be included.
+// ---------------------------------------------------------------------------
+describe('computeSpend fuelMiles — gap delta INCLUDED', () => {
+  const ts2026 = Timestamp.fromDate(new Date(2026, 5, 15));
+
+  it('includes the large gap delta in the total (not excluded)', () => {
+    const r = computeSpend(
+      [
+        fuel('f1', 40, ts2026, 60000),
+        fuel('f2', 40, ts2026, 59500),
+        fuel('f3', 40, ts2026, 56500),
+      ],
+      [],
+      2026
+    );
+    // Gap delta (f2−f3 = 3000) must be INCLUDED.
+    expect(r.fuelMiles.thisYear).toBe(3500);   // 500 + 3000
+    expect(r.fuelMiles.lifetime).toBe(3500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fuelMiles — null loggedAt → lifetime only, not this/prior year
+// ---------------------------------------------------------------------------
+describe('computeSpend fuelMiles — null loggedAt on newer entry', () => {
+  it('counts the delta in lifetime only when newer entry has null loggedAt', () => {
+    // f1 (null loggedAt, odo 51000) is newer, f2 (2026 ts, odo 50000) is prior.
+    // delta = 1000, bucketed by f1.loggedAt = null → lifetime only.
+    const ts2026 = Timestamp.fromDate(new Date(2026, 3, 1));
+    const r = computeSpend(
+      [
+        fuel('f1', 40, null, 51000),
+        fuel('f2', 40, ts2026, 50000),
+      ],
+      [],
+      2026
+    );
+    expect(r.fuelMiles.lifetime).toBe(1000);
+    expect(r.fuelMiles.thisYear).toBe(0);
+    expect(r.fuelMiles.priorYear).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fuelMiles — year-boundary (MEANINGFUL test, AC-T)
+//
+// Fixture: Dec 31, 2025 at 23:00 LOCAL (America/New_York, UTC-5 in winter).
+//   new Date(2025, 11, 31, 23, 0) → local 2025-12-31T23:00 in NY
+//   UTC equivalent                → 2026-01-01T04:00Z
+//
+//   LOCAL  getFullYear() → 2025  (correct — fill is in 2025)
+//   UTC   toISOString()  → "2026-01-01T04:00:00.000Z" → year 2026 (WRONG)
+//
+// Two entries newest-first:
+//   f1: odo 52000, loggedAt = Dec 31 2025 23:00 LOCAL
+//   f2: odo 50000, loggedAt = some 2025 date (oldest, no prior)
+//
+// delta = 2000, bucketed by f1.loggedAt LOCAL year = 2025 = priorYear.
+// A toISOString/UTC bucketer would put the 2000 mi in thisYear (2026).
+// ---------------------------------------------------------------------------
+describe('computeSpend fuelMiles — year-boundary (Dec-31 local ≠ UTC year)', () => {
+  // Dec 31, 2025 at 23:00 LOCAL (NY, UTC-5) = 2026-01-01T04:00Z.
+  // Local year: 2025. UTC year: 2026.
+  const dec31LocalTs = Timestamp.fromDate(new Date(2025, 11, 31, 23, 0));
+  const midDec2025Ts = Timestamp.fromDate(new Date(2025, 11, 1, 12, 0));
+
+  it('Dec-31 23:00 local fill → distance buckets to priorYear (2025)', () => {
+    const r = computeSpend(
+      [
+        fuel('f1', 50, dec31LocalTs, 52000),  // local 2025 → priorYear
+        fuel('f2', 50, midDec2025Ts, 50000),  // oldest, no prior → 0
+      ],
+      [],
+      2026 // referenceYear; priorYear = 2025
+    );
+    // Correct local-year bucketer: 2000 mi → priorYear (2025).
+    expect(r.fuelMiles.priorYear).toBe(2000);
+    expect(r.fuelMiles.thisYear).toBe(0);
+    expect(r.fuelMiles.lifetime).toBe(2000);
+    // A toISOString/UTC bucketer would put 2000 mi in thisYear — this
+    // assertion would fail under that implementation.
   });
 });

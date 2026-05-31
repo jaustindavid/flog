@@ -62,12 +62,47 @@ promotion time is fine; skipping it is not.
 
 ## Next
 
-_(empty — the Maintenance phase shipped; Phases 1–3 are in Done. No
-committed next item. Likely-next is small post-playtest polish the owner
-reserved during design: spend-report placement, modal-vs-dedicated-route
-for the maintenance form, an optional standing "log maintenance" link on
-the fuel screen, and pre-checking the banner-tap reset box — pending the
-owner's hands-on feedback.)_
+Promoted 2026-05-31 — both design-locked, dispatch-ready owner requests
+(smallest first).
+
+- `[~]` **Next-reminder-due display (car-detail + Cars list)** — S.
+  **Owner request 2026-05-31.** Show the **projected next due** for a
+  car's reminder (when configured AND it has a baseline — a
+  `resetsReminder` entry): the mileage and/or date it will fire,
+  whichever-comes-first (both dimensions if both intervals are set, one
+  if only one). The forward-looking complement to the Phase-3 banner
+  (which only fires once already due/overdue) — effectively the soft
+  "upcoming" view deferred in PRD §14.3.
+  **Two surfaces** (owner 2026-05-31):
+  - **(a) Car-detail Maintenance section** — near the reminder config,
+    e.g. "Next oil change: 9,001 mi or by 2026-08-31". Data is already
+    loaded on this screen.
+  - **(b) Each car row on the Cars list (`CarListItem`)** — fill the
+    existing whitespace beside the name + share-count with "next
+    maintenance in X mi / Y days" (a countdown; "overdue by …" if past).
+    The list does NOT currently load per-car maintenance/fuel, so each
+    row fetches its own maintenance (baseline) + fuel (current odometer)
+    — N×2 getDocs, fine at family scale (owner: fetches cheap, prefer
+    elegance). Each row's carId is fixed, so there's NO stale-flash
+    concern (unlike the log-screen banner); just a per-row loading state
+    (render nothing until ready).
+  Shared compute: extend `computeReminder` to also return
+  `dueOdometer`/`dueDate`, or add a sibling `computeNextDue`; reuse
+  Phase-3's derived baseline + intervals + `addMonths`. States per
+  surface: no reminder → nothing; reminder but no baseline → "log a
+  [label] to start" (car-detail) / nothing (list); baseline → the
+  projection. Additive display only — no rules/schema change.
+
+- `[›]` **Distance-per-window in the Spend report** — IMPLEMENTED
+  2026-05-31 (distance on the Spend report's Fuel row, same local-year
+  bucketing as cost so the two align, gap deltas included; +6 unit
+  tests, all gates green). Handoff `dispatch/spend-distance-handoff.md`.
+  **Pending owner V2 + deploy.**
+
+_(Also reserved but not yet ticketed — maintenance-UI tweaks pending
+owner playtest feedback: spend-report placement, modal-vs-route for the
+maintenance form, an optional standing "log maintenance" link on the
+fuel screen, and pre-checking the banner-tap reset box.)_
 
 ---
 
@@ -75,50 +110,6 @@ owner's hands-on feedback.)_
 
 Likely to come up in the first weeks post-v0, in roughly this order
 (smallest first, so quick wins land before bigger commitments).
-
-- `[~]` **Next-reminder-due display on the car page** — XS to S.
-  **Owner request 2026-05-31.** On the car-detail Maintenance section,
-  when a reminder is configured AND has a baseline (a `resetsReminder`
-  entry exists), show the **projected next due** — the mileage and/or
-  the date it will fire: e.g. "Next oil change: 9,001 mi or by
-  2026-08-31" (whichever-comes-first framing; show both dimensions if
-  both intervals are set, one if only one). This is the forward-looking
-  complement to the Phase-3 banner (which only fires once already
-  due/overdue) — effectively the soft "upcoming" view deferred in
-  PRD §14.3. Reuses Phase-3's derived baseline + intervals +
-  `addMonths`: extend `computeReminder` to also return
-  `dueOdometer`/`dueDate`, or add a sibling `computeNextDue`, and render
-  in the Maintenance section near the reminder config. States: no
-  reminder → nothing; reminder but no baseline → "log a [label] to
-  start"; baseline present → the projection. Additive display only — no
-  rules/schema change. Promote to Next + brief when the owner says go.
-
-- `[~]` **Distance-per-window in the Spend report** — XS to S. **Owner
-  request 2026-05-31** (disambiguated: per-window, beside the Fuel row —
-  NOT per-fill). In the Spend 3×3, show distance driven per window
-  beside the **Fuel** row — e.g. "Fuel: $980 / 3.4k mi" for this-year /
-  prior-year / lifetime (Maintenance + Total rows unchanged). Distance
-  for a window = sum of positive per-fill odometer deltas
-  (`current.odometer − priorFill.odometer`) for fuel entries bucketed by
-  the SAME local-calendar-year-of-`loggedAt` as the spend cost — so cost
-  and distance bucket identically and $/mi falls out. **Include gap
-  deltas** (a missed fill still drove real miles; the odometer span is
-  the truth — do NOT apply the longest-tank 1.5×-median gap exclusion
-  here). Extend `computeSpend` (or add a sibling `computeDistance`) —
-  pure, same bucketing, unit-tested incl. the no-prior-fill (first
-  entry) and year-boundary cases. Additive display; no rules/schema
-  change. Format compact ("3.4k mi"); tune at V2.
-
-- `[ ]` **Optional `note` field on fuel entries** — XS. Per PRD
-  §11.2 + M4 design Q3 (2026-05-28). The legacy Google Form had a
-  free-text note column at ~1% usage; we dropped it from the v0
-  Entry schema for shape simplicity. If real family usage surfaces
-  the need ("I had to write down which pump or trip this was for"),
-  add an optional `note: string` field to `cars/{carId}/entries/{eId}`
-  and a single-line input under the Cost field on the log form.
-  Schema delta is additive; rules unchanged (covered by the existing
-  create rule). Trigger: a family member asks for it, OR M5's per-
-  car entries view makes us want fill-up context for outliers.
 
 - `[ ]` **CSV export of your data** — S. Committed in PRD §1.4 as
   part of "your data is yours." Per-user: export all entries
@@ -130,30 +121,6 @@ Likely to come up in the first weeks post-v0, in roughly this order
   `scripts/import-history.mjs`, not a round-trip feature. Export
   now stands alone, and is low-urgency — no users until well past
   launch.)
-
-- `[~]` **Cars-screen quick-action kebab menu** — S. **Design
-  captured 2026-05-29** (UI design memo + owner decisions);
-  brief-ready when its turn comes. Came from the post-v0 UI
-  pass (A=log-screen restructure shipped, B=PWA polish shipped,
-  C=this — deferred behind E per owner). Each `CarListItem`
-  gains a ⋯ (kebab) on the right edge; tapping the row body
-  still navigates to detail (unchanged); tapping ⋯ opens a
-  bottom-sheet with Rename / Share / Delete, reusing the
-  existing `RenameCarForm` / `ShareForm` / `ConfirmDialog`.
-  Drops the common owner actions from 3 taps to 2. Resolved
-  design decisions: (1) **bottom-sheet** menu style (mobile-
-  native, reuses existing modal infra) — not a popover;
-  (2) ⋯ **hidden for non-owner sharees** (no "leave this car"
-  capability exists yet; simplest is hide); (3) **additive** —
-  the kebab and the detail screen BOTH retain rename/share/
-  delete (detail is not stripped to view-only), so it's a
-  shortcut not a move, lower regression risk. Accessibility
-  floor: the "Modal focus-trap + ARIA pass" item below applies
-  to the new sheet. Low intrinsic value (secondary surface;
-  car rename/share/delete happens ~once per car lifetime) —
-  hence deferred behind E (edit entries). Likely a Sonnet-
-  implementer candidate when briefed (mechanical, reuses
-  existing components).
 
 The big backlog. Gated by triggers, waiting on usage feedback to
 validate demand, or genuine future-phase structural work.
@@ -287,6 +254,30 @@ validate demand, or genuine future-phase structural work.
   around it locally with their own `min-h-screen bg-white` wrapper,
   but the real fix is a global background decision (force light, or
   do proper dark-mode tokens). Worth folding into this item.
+- `[ ]` **Optional `note` field on fuel entries** — XS. **Demoted
+  Soon → Later 2026-05-31** (no demand yet). Per PRD §11.2 + M4 design
+  Q3 (2026-05-28). The legacy Google Form had a free-text note column
+  at ~1% usage; dropped from the v0 Entry schema for shape simplicity.
+  If real family usage surfaces the need ("I had to write down which
+  pump or trip this was for"), add an optional `note: string` field to
+  `cars/{carId}/entries/{eId}` and a single-line input under the Cost
+  field on the log form. Schema delta is additive; rules unchanged
+  (covered by the existing create rule). Trigger: a family member asks.
+- `[~]` **Cars-screen quick-action kebab menu** — S. **Demoted
+  Soon → Later 2026-05-31** (low intrinsic value — car rename/share/
+  delete happens ~once per car lifetime). Design captured 2026-05-29
+  (UI design memo + owner decisions); brief-ready. Each `CarListItem`
+  gains a ⋯ (kebab) on the right edge; tapping the row body still
+  navigates to detail (unchanged); tapping ⋯ opens a bottom-sheet with
+  Rename / Share / Delete, reusing the existing `RenameCarForm` /
+  `ShareForm` / `ConfirmDialog` (3 taps → 2). Resolved design
+  decisions: (1) **bottom-sheet** (mobile-native, reuses modal infra) —
+  not a popover; (2) ⋯ **hidden for non-owner sharees** (no "leave this
+  car" capability exists yet); (3) **additive** — the detail screen
+  keeps rename/share/delete too, so it's a shortcut not a move (lower
+  regression risk). The "Modal focus-trap + ARIA pass" item applies to
+  the new sheet. Sonnet-implementer candidate (mechanical, reuses
+  existing components).
 
 ### Auth / identity
 
@@ -451,6 +442,17 @@ validate demand, or genuine future-phase structural work.
 ---
 
 ## Done
+
+- `[x]` **Distance-per-window in the Spend report** — done 2026-05-31
+  (dispatch `spend-distance`). Extended `computeSpend` to also return
+  `fuelMiles: { thisYear, priorYear, lifetime }` — identical
+  local-calendar-year bucketing as the cost so the two align
+  window-for-window. Gap deltas INCLUDED (no gap exclusion — opposite
+  of longestTank). `SpendReport.tsx` renders `"$X.XX / Y mi"` on the
+  Fuel row only (compact format: sub-1k whole miles, 1k+ one-decimal
+  "k"). +6 unit tests (cross-window, gap-included, no-prior, null
+  loggedAt, year-boundary meaningful fixture). Maintenance + Total rows
+  unchanged. No new fetch, no rules, no schema. Gates all green.
 
 - `[x]` **Maintenance phase 3 — service reminders** — done 2026-05-31
   (owner V2 + committed). Per-car `Car.maintenanceReminder` config

@@ -9,11 +9,18 @@
 // it's the tax-filing number. Column labels are derived from the
 // injected referenceYear so they're never hard-coded.
 //
+// Fuel row shows cost on the first line and distance on the second
+// (a literal line break, not a "/" — so the compact "4.6k mi" unit
+// can't wrap mid-token in a narrow column). Maintenance + Total rows
+// unchanged. Distance format is compact: sub-1k rounds to nearest whole
+// mile; 1k+ shows one decimal place + "k".
+//
 // Currency format mirrors EntriesTable: `$${n.toFixed(2)}`. No shared
 // formatter — that's expected per dispatch brief.
 //
 // Pure presentational: no data fetching, no side effects.
 
+import type { ReactNode } from 'react';
 import type { SpendReport as SpendReportData } from '../maintenance/computeSpend';
 
 interface SpendReportProps {
@@ -21,38 +28,36 @@ interface SpendReportProps {
   referenceYear: number;
 }
 
-function fmt(n: number): string {
+function fmtCost(n: number): string {
   return `$${n.toFixed(2)}`;
+}
+
+/** Compact mile formatter: e.g. 0 → "0 mi", 750 → "750 mi", 3400 → "3.4k mi" */
+function fmtMiles(n: number): string {
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(1)}k mi`;
+  }
+  return `${Math.round(n)} mi`;
+}
+
+/**
+ * Fuel cell: cost on the first line, distance on the second (line break,
+ * not "/"). `whitespace-nowrap` on the miles keeps "4.6k mi" from
+ * breaking between the number and the unit. Cost only when miles is 0.
+ */
+function fuelCell(cost: number, miles: number): ReactNode {
+  if (miles === 0) return fmtCost(cost);
+  return (
+    <>
+      {fmtCost(cost)}
+      <br />
+      <span className="whitespace-nowrap">{fmtMiles(miles)}</span>
+    </>
+  );
 }
 
 export function SpendReport({ report, referenceYear }: SpendReportProps) {
   const priorYearNum = referenceYear - 1;
-
-  const rows: Array<{
-    label: string;
-    thisYear: number;
-    priorYear: number;
-    lifetime: number;
-  }> = [
-    {
-      label: 'Maintenance',
-      thisYear: report.thisYear.maintenance,
-      priorYear: report.priorYear.maintenance,
-      lifetime: report.lifetime.maintenance,
-    },
-    {
-      label: 'Fuel',
-      thisYear: report.thisYear.fuel,
-      priorYear: report.priorYear.fuel,
-      lifetime: report.lifetime.fuel,
-    },
-    {
-      label: 'Total',
-      thisYear: report.thisYear.total,
-      priorYear: report.priorYear.total,
-      lifetime: report.lifetime.total,
-    },
-  ];
 
   return (
     <div className="overflow-x-auto -mx-2">
@@ -71,27 +76,56 @@ export function SpendReport({ report, referenceYear }: SpendReportProps) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => {
-            const isTotal = i === rows.length - 1;
-            const rowBase = isTotal
-              ? 'border-t border-gray-200 font-semibold'
-              : 'border-b border-gray-100 last:border-b-0';
-            return (
-              <tr key={row.label} className={rowBase}>
-                <td className="py-2 px-2 text-gray-600">{row.label}</td>
-                <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
-                  {fmt(row.thisYear)}
-                </td>
-                {/* Prior year: headline emphasis */}
-                <td className="py-2 px-2 text-gray-900 font-semibold text-right tabular-nums">
-                  {fmt(row.priorYear)}
-                </td>
-                <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
-                  {fmt(row.lifetime)}
-                </td>
-              </tr>
-            );
-          })}
+          {/* Maintenance row — cost only, unchanged */}
+          <tr className="border-b border-gray-100">
+            <td className="py-2 px-2 text-gray-600">Maintenance</td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fmtCost(report.thisYear.maintenance)}
+            </td>
+            <td className="py-2 px-2 text-gray-900 font-semibold text-right tabular-nums">
+              {fmtCost(report.priorYear.maintenance)}
+            </td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fmtCost(report.lifetime.maintenance)}
+            </td>
+          </tr>
+
+          {/* Fuel row — cost / distance per window */}
+          <tr className="border-b border-gray-100">
+            <td className="py-2 px-2 text-gray-600">Fuel</td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fuelCell(
+                report.thisYear.fuel,
+                report.fuelMiles.thisYear
+              )}
+            </td>
+            <td className="py-2 px-2 text-gray-900 font-semibold text-right tabular-nums">
+              {fuelCell(
+                report.priorYear.fuel,
+                report.fuelMiles.priorYear
+              )}
+            </td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fuelCell(
+                report.lifetime.fuel,
+                report.fuelMiles.lifetime
+              )}
+            </td>
+          </tr>
+
+          {/* Total row — cost only, unchanged */}
+          <tr className="border-t border-gray-200 font-semibold">
+            <td className="py-2 px-2 text-gray-600">Total</td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fmtCost(report.thisYear.total)}
+            </td>
+            <td className="py-2 px-2 text-gray-900 font-semibold text-right tabular-nums">
+              {fmtCost(report.priorYear.total)}
+            </td>
+            <td className="py-2 px-2 text-gray-700 text-right tabular-nums">
+              {fmtCost(report.lifetime.total)}
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
