@@ -871,7 +871,10 @@ screen is authoritative.
 (default OFF). Checking it writes `resetsReminder = true`; because the
 baseline is derived, that entry immediately becomes the new "last
 done." Odometer is required on every maintenance entry, so a reset
-always carries a mileage baseline.
+always carries a mileage baseline. The default stays OFF **even when the
+modal is opened from the banner tap** — resetting the interval is always
+a deliberate, explicit action, never pre-checked (owner decision
+2026-05-31).
 
 ### 14.4 Spend reporting
 

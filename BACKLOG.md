@@ -66,12 +66,11 @@ _Empty — both 2026-05-31 owner requests (distance-per-window,
 next-reminder-due display) are implemented and in Done. Next is a valid
 empty state; Soon's CSV export is the next candidate to promote._
 
-_(Reserved but not yet ticketed — maintenance-UI tweaks pending owner
-playtest feedback: spend-report placement, and pre-checking the
-banner-tap reset box. Resolved 2026-05-31: the maintenance form stays a
-**modal** (not a route), and the **banner is the only maintenance
-reference on the fuel screen** — no standing "log maintenance" link.
-See PRD §14.5.)_
+_(All maintenance-UI playtest tweaks reserved at ship time are now
+resolved: modal form (not a route); banner-only fuel screen (no standing
+"log maintenance" link); 3×3 spend-report placement on car-detail kept
+as-is; banner-tap reset stays deliberate (never pre-checked). See PRD
+§14.3 + §14.5.)_
 
 ---
 
@@ -102,64 +101,64 @@ Likely to come up in the first weeks post-v0, in roughly this order
   now stands alone, and is low-urgency — no users until well past
   launch.)
 
+- `[ ]` **Printable vehicle summary (maintenance + mileage)** — M.
+  **Owner request 2026-05-31.** A print-friendly, per-vehicle summary:
+  the car's maintenance history plus **mileage summaries bucketed by
+  period**. For records / resale / warranty / tax backup.
+  - **Periods:** quarterly and annual. **Skip any quarter with no
+    fill-ups**; **always show every annual row, even when empty** —
+    render "0 mi / 0 gal recorded". Calendar quarters/years by local
+    entry date (same local-bucketing discipline as the spend report —
+    never `toISOString`).
+  - **Mileage** per period = sum of positive per-fill odometer deltas
+    (reuse the distance logic from `computeSpend` `fuelMiles`; annual
+    bucketing exists, quarterly is the new bit). **Gallons** = sum of
+    gallons in the period.
+  - **Maintenance** = the car's `maintenance` records (§5.5): date /
+    odometer / cost / note, as a printable table.
+  - **Printable** = a print-optimized view (browser print / save-as-PDF;
+    no backend). Decide print-CSS-on-existing-view vs a dedicated
+    print-styled route/component during design.
+  - Per-vehicle (one car), matching the per-vehicle tax framing.
+  - **Open Qs:** include cost columns / the 3×3 spend numbers, or
+    mileage + maintenance only? All-time vs a chosen year? Exact layout.
+    Complementary to CSV export (raw data) vs this (formatted summary).
+
 The big backlog. Gated by triggers, waiting on usage feedback to
 validate demand, or genuine future-phase structural work.
 
 ### Reports & insights
 
-- `[ ]` **Per-car insight tiles** — S. *Additional* tiles beyond the
-  shipped set (expected range, P95 MPG, longest tank, largest fill =
-  max-ever-fuel — see PRD Flow C): best-MPG, worst-MPG, longest
-  interval between fills, average cost/mile. Computed client-side from
-  the fetched entries. v2-ish.
-- `[ ]` **Suspect-data detector (anomaly flag)** — S, MAY NOT BE
-  ACTIONABLE (see "open question" below — file now, decide later).
-  Idea from the 2026-05-29 gap-fix discussion. Pure derived check
-  over existing entries (no schema/rules/data-model change; same
-  `computeStats` median/percentile machinery) that flags suspicious
-  per-fill pairs and **classifies by signature** — neither inventing
-  data nor silently skipping it, just surfacing it for human
-  judgment:
-  - **Compensating pair** (abnormally low MPG immediately followed by
-    abnormally high, deltas summing plausibly) → likely a **typo** on
-    one entry's odometer. CORRECTABLE today via the edit feature →
-    flag links to the row: "Looks like a typo — odometer may be off.
-    [Edit]".
-  - **Lone high outlier** (high MPG/distance, no compensating
-    neighbor) → likely a **missing fill**. NOT correctable with real
-    data → informational only: "Possible missing fill here — stats
-    skip this gap."
-  Surface as a quiet "⚠ N suspect entries" affordance on the
-  car-detail screen linking to the row(s).
-  Why it might be worth it: the real pain isn't the math (the stats
-  are already robust — P95 + longest-tank skip gaps; lifetime
-  self-corrects for typos since the errors cancel in the sum, and is
-  only ~2-5% high for a true missing fill). The pain is
-  **discoverability** — the one Caterham typo was found by manually
-  digging through the CSV. A detector turns that into a glance.
-  **Open question / why it may not be actionable**: with prod data
-  now clean (the Caterham typo was edited; the known gaps are
-  understood), there may be ~nothing left to detect at family scale —
-  bad rows arrive ~1/year. The detector earns its keep only if
-  suspect data recurs often enough that hunting it by hand is
-  annoying. Revisit if/when a second "these numbers look wrong"
-  moment happens; until then it's speculative.
-  Related decision (same discussion): **in-app backfill is probably
-  NOT worth building.** Its real use is repairing data; the
-  repairable cases are typos (edit already handles them) and truly-
-  missing fills can't be backfilled with real numbers anyway. The
-  heavyweight historical-insert (editable fill-date field, or
-  switching the sort from `loggedAt` to `odometer` — touches schema,
-  rules, form, and every stat that assumes current ordering) buys
-  little over detector + existing edit. Filed here as the rationale;
-  no separate backfill item created on purpose.
-- `[ ]` **Trends over time** — M. Charts for MPG-over-time,
-  cost-over-time, gallons-over-time per car. Needs a charting
-  library (chart.js or similar; pick during dispatch).
+- `[ ]` **Trends over time + deeper per-car analysis** — M. Charts for
+  MPG / cost / gallons over time, per car (needs a charting library —
+  chart.js or similar, pick during dispatch). **Do the whole analysis
+  pass in one session, if at all** — no piecemeal stat-by-stat adds.
+  Absorbs the former "per-car insight tiles" idea; decide in that
+  session what (if anything) earns a tile. The obvious candidates are
+  mostly already covered or not worth surfacing:
+  - *best-MPG* ≈ the shipped **P95 MPG** (gap-robust; a raw max just
+    surfaces a typo).
+  - *worst-MPG* — what actually matters is the **lower range limit**,
+    and the **expected-range band already reports it** (its low end is
+    `largestFill × P10 mpg`). The P10 MPG is computed but hidden; the
+    cheapest possible add is surfacing that number, if wanted.
+  - *avg cost/mile* — already derivable from the spend 3×3 ÷
+    distance-per-window (§14.4 leaves $/mi for the reader); could become
+    an explicit cell.
+  - *longest interval between fills* — **dropped.** It really measures
+    "time a car sat unused" — a function of miles, and not something an
+    owner wants surfaced. Not worth a stat.
+  All client-side from fetched entries; no schema/rules change.
 - `[ ]` **Cross-car aggregates** — M. "Total spent on fuel this
   year across all cars I have access to." Probably gated on the
   user's allowlist of cars; cost shape is one Firestore query per
-  car (small for family scale).
+  car (small for family scale). **Why it stays Later (no clear need):**
+  the spend report's tax job is **per-vehicle and per-category** —
+  fuel and maintenance are deductible separately, always for one
+  vehicle — which the per-car 3×3 already serves exactly. A cross-car
+  total blurs the dimension that has the job; there's no identified use
+  for "how much across all my cars." Promote only if a real one
+  surfaces.
 - `[ ]` **Show "logged by {name}" per entry — requires nickname
   infrastructure** — S to M. Trigger: a family member asks "who
   logged this fill?" on a shared car. M5 deliberately hid
