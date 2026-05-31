@@ -74,8 +74,8 @@ The working list is `BACKLOG.md` once v0 ships. Notable deferrals
 already known at PRD time:
 
 - Edit/delete entries (Soon)
-- Maintenance entries + service reminders (later phase; opens up
-  oil-change-due, tire-rotation-due, etc.)
+- Maintenance entries + service reminders + spend reporting — design
+  now locked; full spec in §14 (Maintenance phase)
 - Reports beyond per-car MPG (max-ever-fuel, best-MPG, trends)
 - CSV export of your data; account deletion (committed-to in §1.4,
   not v0)
@@ -652,6 +652,164 @@ forces revisit.
   external households.
 - Google changes free-tier terms or OAuth requirements in a way
   that adds real per-user cost.
+
+---
+
+## 14. Maintenance phase (planned — design locked 2026-05-29)
+
+A post-v0 phase extending flog from fuel-only to fuel **and**
+maintenance. Settled in a 2026-05-29 design conversation informed by a
+survey of consumer maintenance apps (Drivvo, Simply Auto, AUTOsist,
+Fuelio, CarExpenses, CarScope, CARFAX). Three sub-features, shippable
+in order: (1) maintenance logging, (2) spend reporting, (3) service
+reminders. The ethos holds: it must not slow the 10-second fuel
+capture, and reminders are a byproduct of logging — no push, no chore.
+
+**Load-bearing decision — a SEPARATE collection, not a typed unified
+entry.** Maintenance lives in its own subcollection; fuel `entries`
+stays the pure MPG stream. Rationale: it protects the MPG/stat
+pipeline, the P1 entry-validation rules, and the gap-detection logic
+(all of which assume `entries` are full fuel fill-ups); a typed-unified
+stream would force `gallons` optional again, conditionalize the rules
+by type, and risk a single missed `type` filter silently corrupting
+the stats — the exact failure class hardened against on 2026-05-29. The
+legacy Google Form's one-row shape was a form constraint, not a
+data-model ideal (and the history import already skipped its
+blank-gallons maintenance rows). Display MAY still merge both into one
+timeline — a UI concern, decoupled from storage.
+
+### 14.1 Data model
+
+New entity — Maintenance (`cars/{carId}/maintenance/{maintId}`):
+
+| field | type | required | notes |
+|---|---|---|---|
+| `id` | string | yes | auto doc id |
+| `loggedByUid` | string | yes | who created it |
+| `date` | timestamp | yes | when the service happened; **user-set and editable** (unlike fuel `loggedAt` — backdating a real service date is expected). Reminder time-baseline and report bucketing use this. |
+| `odometer` | integer | yes | miles at service; required (powers the mileage reminder). Future nicety: auto-fill from a fuel fill-up logged in the last day. |
+| `cost` | number | yes | float; unitless (USD assumed, as elsewhere) |
+| `note` | string | yes | freeform "what happened" — replaces any category taxonomy; carries the entry's meaning |
+| `resetsReminder` | boolean | yes | did this service reset the car's maintenance reminder (the input-screen checkbox; default `false`) |
+| `loggedAt` | timestamp | yes | server-set on submit; not user-editable (audit) |
+
+Car (§5.2) gains one field:
+
+| field | type | required | notes |
+|---|---|---|---|
+| `maintenanceReminder` | map or null | no | `null` when unset. When set: `{ label: string, intervalMiles: int\|null, intervalMonths: int\|null }`, with at least one interval non-null. **Config only** — the "last done" baseline is DERIVED (§14.3), never stored here. |
+
+### 14.2 Access control
+
+The maintenance subcollection mirrors Entry (§6.3): read / create /
+update / delete gated on the parent car's owner-or-current-sharee
+(reuse the `canReadParent()` / `canMutate()` pattern). Field validation
+in the P1 style — create pins the field set (`hasOnly`), types, and
+ranges; `loggedAt == request.time`; **`date` is any timestamp (NOT
+pinned to `request.time` — backdating is allowed)**; `odometer`/`cost`
+numeric + range; `note` is a string; `resetsReminder` is a bool. Update
+is restricted to the editable fields (`date`, `odometer`, `cost`,
+`note`, `resetsReminder`); `loggedByUid` and `loggedAt` immutable. The
+Car update rule (§6.2) extends its `hasOnly` allow-set to include
+`maintenanceReminder` (owner-only, as today).
+
+### 14.3 Reminders (mechanics)
+
+One reminder per car. The baseline is **derived**, not stored: the
+maintenance entry with `resetsReminder == true` and the latest `date`
+(tiebreak `odometer`) is the "last done." Next due:
+
+- **mileage**: `lastDone.odometer + intervalMiles`, vs the current
+  odometer = the latest fuel entry's `odometer`.
+- **time**: `lastDone.date + intervalMonths`, vs today.
+
+Due fires on **whichever comes first**. Worked example: oil changed at
+6,001 mi today, interval 3,000 mi / 3 months → due at the first fuel
+reading ≥ 9,001 mi OR the first date ≥ +3 months. No reminder
+configured, or no `resetsReminder` entry yet → no banner.
+
+**Banner**: the log/fuel screen only, for the selected car — states
+upcoming / due / overdue (with the overage, e.g. "Oil change overdue
+by 400 mi"). **No push** — flog has no service worker; the banner is
+in-app, seen on open. (Push later = service worker + FCM + a server
+trigger; out of scope, a known ceiling.)
+
+**Reset checkbox**: on the maintenance input screen, "↺ Reset [label]"
+(default OFF). Checking it writes `resetsReminder = true`; because the
+baseline is derived, that entry immediately becomes the new "last
+done." Odometer is required on every maintenance entry, so a reset
+always carries a mileage baseline.
+
+### 14.4 Spend reporting
+
+Car-detail screen. A 3×3 of summed `cost` — rows **Maintenance / Fuel
+/ Total**, columns **This year / Prior year / Lifetime**. Windows are
+**calendar years** by the entry date (fuel by `loggedAt`'s date,
+maintenance by `date`): This year = Jan 1 → today; **Prior year = the
+full previous calendar year — the tax-relevant headline**; Lifetime =
+all. Pure client-side aggregation over the two already-fetched
+collections (no backend; trivial at family scale). The
+maintenance-vs-fuel split is the one distinction that has a job (tax),
+and the collection split provides it structurally.
+
+### 14.5 Placement & interaction
+
+- **The fuel/home screen stays pure** — no standing maintenance
+  affordance; identical to today for anyone who never uses
+  maintenance. The only maintenance element that can appear is the
+  reminder banner (§14.3), shown only when a reminder is configured
+  AND due; the banner is **tappable → opens the maintenance form** for
+  that car (so the reset checkbox is right there at the pump). *Open:
+  the owner may later add a standing "log maintenance" link here; left
+  off for now to keep the pump-side capture single-purpose.*
+- **The car-detail screen is maintenance's home** — a **"Log
+  maintenance"** button sits **above the fuel/entries record**,
+  alongside the maintenance history, the 3×3 spend report (§14.4), and
+  the reminder config.
+- **Two entry points, one form** — the car-detail button (deliberate
+  logging) and the tappable banner (reminder-driven "log it now").
+- **Form factor** — the maintenance entry form is a **modal**,
+  consistent with Add-car / Edit-entry / Share. *Revisitable after
+  hands-on click-testing (modal vs a dedicated route).*
+
+### 14.6 Decisions locked / out of scope
+
+- **Separate** maintenance collection, NOT a typed unified entry
+  (§14 intro).
+- **Derived** reminder baseline, NOT a denormalized `lastDone` on the
+  car — single source of truth, delete-safe (owner 2026-05-29: "risk
+  is expensive; prefer a good data model over saving a fetch").
+- **No categories.** The only tax-relevant split is
+  maintenance-vs-fuel (structural); per-category reporting is unwanted;
+  `note` carries "what happened." Revisit only if "how much on tires?"
+  is ever actually asked.
+- **No push** (no service worker) — in-app banner only.
+- **No factory/VIN service schedules** (no backend/VIN decode) —
+  intervals are user-set; a small bundled default suggestion is an
+  optional nicety.
+- **One reminder per car** — multi-reminder is a clean later extension
+  (`resetsReminder` becomes a per-reminder selection).
+- Cross-car spend aggregates remain a separate BACKLOG item.
+
+### 14.7 Phasing
+
+Phases 2 and 3 each depend only on Phase 1, not on each other — so
+after Phase 1 they're independent and order is flexible. Default order
+is 2-before-3 (reporting is cheaper and lower-risk; reminders touch the
+fuel screen). Phase 1 alone is shippable but "log without spend view";
+1+2 MAY be merged for a more complete first ship — kept separate here
+for tighter dispatches.
+
+1. **Logging** — the maintenance collection + rules + a module + the
+   log-maintenance modal (fields: date / odometer / cost / note). The
+   `resetsReminder` field is written (default `false`) but its checkbox
+   does NOT appear yet — there's no reminder to reset. Delivers value
+   alone (a real maintenance log).
+2. **Reporting** — the 3×3 on car detail. Pure read/aggregate over
+   phase-1 data.
+3. **Reminders** — the car reminder config + the derived banner on the
+   fuel screen + the reset checkbox **added to the maintenance modal**
+   (shown only when the car has a reminder configured).
 
 ---
 

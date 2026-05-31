@@ -62,8 +62,27 @@ promotion time is fine; skipping it is not.
 
 ## Next
 
-(empty — v0 work is tracked via PRD §10. First post-v0 item lands
-here when v0 ships.)
+**Maintenance phase** — the next build focus. Design locked 2026-05-29
+(design conversation + a deep-research survey); full spec **PRD §14**.
+Key shape: a SEPARATE `maintenance` collection (not a `type` on Entry —
+keeps the fuel/MPG stream pure), no categories, a derived reminder
+baseline, and the fuel screen stays pure. Three sequenced dispatches —
+2 and 3 depend only on 1, so after Phase 1 they're independent; do 2
+first (cheaper, lower-risk).
+
+- `[~]` **Maint. Phase 1 — logging** — M. New `cars/{id}/maintenance`
+  collection + P1-style rules + a log-maintenance modal from a button
+  on the car-detail screen (fuel screen untouched). Phase-1 modal
+  fields: date / odometer / cost / note (the `resetsReminder` checkbox
+  arrives in Phase 3). Ships a real maintenance log alone. **The
+  immediate next dispatch.** Spec PRD §14.1–14.2, §14.5.
+- `[~]` **Maint. Phase 2 — spend reporting** — S. The 3×3
+  (Maintenance/Fuel/Total × This-year/Prior-year/Lifetime), calendar
+  windows, on car-detail; client-side aggregation over both
+  collections. Spec PRD §14.4.
+- `[~]` **Maint. Phase 3 — reminders** — M. Per-car reminder config +
+  the derived banner on the fuel screen + the reset checkbox added to
+  the maintenance modal. Spec PRD §14.3, §14.5.
 
 ---
 
@@ -120,23 +139,6 @@ Likely to come up in the first weeks post-v0, in roughly this order
 
 The big backlog. Gated by triggers, waiting on usage feedback to
 validate demand, or genuine future-phase structural work.
-
-### Maintenance phase
-
-- `[ ]` **Maintenance entries (type field on Entry)** — M.
-  Reintroduce the "fuel vs maintenance" distinction the legacy
-  Google Form had, but with first-class data treatment. Adds a
-  `type` field to Entry and conditionalises required fields
-  accordingly. Opens the door to the next two items. Trigger: enough
-  v0 usage to confirm fuel-only is feeling cramped.
-- `[ ]` **Maintenance service log fields** — S. What was done, by
-  whom, parts cost vs labor cost, notes. Schema design conversation
-  needed.
-- `[ ]` **Service reminders** — L. "3,000 mi since last oil
-  change → flag in the car detail view." Per-car configurable
-  intervals; per-make/model defaults a stretch goal. New surface
-  area: a reminders/alerts UI. Likely a separate phase, not a
-  single dispatch.
 
 ### Reports & insights
 
