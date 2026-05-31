@@ -9,7 +9,7 @@
 // only delete (M5 §7.6) — the slot M4 V6 fix-forward vacated.
 
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { useCar } from '../cars/useCar';
 import { deleteCar } from '../cars/cars';
@@ -150,12 +150,6 @@ export function CarDetailScreen() {
     return (
       <main className="p-6 max-w-md mx-auto w-full flex flex-col gap-4">
         <p className="text-base text-gray-800">Car not found or no access.</p>
-        <Link
-          to="/cars"
-          className="text-blue-600 underline text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500 rounded self-start"
-        >
-          ← Back to cars
-        </Link>
       </main>
     );
   }
@@ -172,12 +166,6 @@ export function CarDetailScreen() {
   return (
     <main className="p-6 max-w-md mx-auto w-full flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <Link
-          to="/cars"
-          className="text-blue-600 underline text-sm self-start min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-        >
-          ← Back to cars
-        </Link>
         {isOwner ? (
           <RenameCarForm car={car} onRenamed={refresh} />
         ) : (

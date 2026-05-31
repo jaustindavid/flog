@@ -146,21 +146,24 @@ so they hide when not needed.
 - **SPA** built with React + Vite + TypeScript + Tailwind. Static
   deployment to Firebase Hosting.
 - **Auth**: Firebase Auth, Google OAuth provider only.
-- **Database**: Cloud Firestore. One-shot reads only; no
-  `onSnapshot` listeners. (Justification: only one person fills a
-  car at a time, so the schema does not require synchronization. See
-  §1.2 non-goals.)
+- **Database**: Cloud Firestore. One-shot reads (`getDocs`); no
+  `onSnapshot` listeners (only one person fills a car at a time, so the
+  schema needs no synchronization — see §1.2). Offline persistence is
+  on (`persistentLocalCache` + multi-tab manager): reads serve from
+  IndexedDB and writes queue + sync when connectivity returns.
 - **No backend code**: no Cloud Functions, no Cloud Run, no API
   layer. All logic is client-side; security rules enforce access.
 - **Two environments**: separate GCP projects `flog-dev` and
   `flog-prod`. Each has its own Firestore, OAuth client, Hosting
   site, and authorized-domains list. Runtime config switches by
-  build-time env var (`VITE_FIREBASE_PROJECT` or similar).
-- **Hosting URLs**: `flog-dev.web.app` and `flog-prod.web.app`. No
-  custom domain.
+  build-time env (`.env.development` / `.env.production`).
+- **Hosting URLs**: prod is the custom domain
+  **`flog.austindavid.com`** (Firebase Hosting + Cloudflare DNS); dev is
+  `flog-dev.web.app`. (The old `flog-prod.web.app` still resolves, but
+  the custom domain is canonical — sign-in is pinned to its authDomain.)
 
-ARCHITECTURE.md is drafted post-M1 once infra concretes; this
-section is the elevator pitch.
+ARCHITECTURE.md is not yet drafted; this section plus `AGENTS.md` are
+the working architecture reference.
 
 ---
 
@@ -401,7 +404,7 @@ each `is number` or absent; at least one interval present.
 **Goal**: the project owner gets in for the first time, ready to add
 a car.
 
-1. Visit `flog-prod.web.app` (or `flog-dev.web.app`).
+1. Visit `flog.austindavid.com` (prod) or `flog-dev.web.app` (dev).
 2. Sign in with Google.
 3. App detects no User doc; creates `users/{uid}` (rules permit
    because email matches `ADMIN_EMAIL` carve-out).
@@ -434,7 +437,8 @@ possible.
 2. Landing is the log form. Car picker preselected to most-
    recently-used car **for this user** (cars are sticky to drivers
    in non-fleet use; this isn't a shared-pool model); if none yet,
-   defaults to first car in the list.
+   defaults to first car in the list. Re-tapping the already-selected
+   chip navigates to that car's detail page.
 3. Enter odometer (numeric keypad), gallons (numeric keypad), cost
    (numeric keypad).
 4. Tap **Save**.
@@ -901,7 +905,10 @@ truth — you drove those miles). Maintenance + Total rows unchanged.
   **Decided 2026-05-31: the banner is the ONLY maintenance reference on
   the fuel screen — no standing "log maintenance" link.** The pump-side
   capture stays single-purpose; deliberate maintenance logging lives on
-  car-detail.
+  car-detail. (The car-chip re-tap affordance — re-tapping the
+  already-selected chip navigates to car-detail — is general car
+  navigation, not a maintenance-specific link, and does not contradict
+  this lock.)
 - **The car-detail screen is maintenance's home** — a **"Log
   maintenance"** button sits **above the fuel/entries record**,
   alongside the maintenance history, the 3×3 spend report (§14.4), the

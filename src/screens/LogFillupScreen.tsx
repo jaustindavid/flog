@@ -18,7 +18,7 @@
 // See dispatch §7.7 for the race-correctness rationale.
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { useCars } from '../cars/useCars';
 import { createEntry, getLatestEntry } from '../entries/entries';
@@ -50,6 +50,7 @@ import { Toast, type ToastState } from '../components/Toast';
 
 export function LogFillupScreen() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { state, refresh } = useCars();
   const [selectedCarId, setSelectedCarId] = useState<string | null>(() =>
     getMruCarId()
@@ -257,6 +258,7 @@ export function LogFillupScreen() {
           setSelectedCarId(id);
           setMruCarId(id);
         }}
+        onReselect={(id) => navigate(`/cars/${id}`)}
       />
 
       {showBanner && reminderStatus && (
