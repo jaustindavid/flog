@@ -27,6 +27,10 @@ import { MpgTile } from '../components/MpgTile';
 import { EntriesTable } from '../components/EntriesTable';
 import { EditEntryModal } from '../components/EditEntryModal';
 import type { Entry } from '../entries/entries';
+import { useMaintenance } from '../maintenance/useMaintenance';
+import { MaintenanceTable } from '../components/MaintenanceTable';
+import { MaintenanceModal } from '../components/MaintenanceModal';
+import type { Maintenance } from '../maintenance/maintenance';
 
 export function CarDetailScreen() {
   const { carId } = useParams<{ carId: string }>();
@@ -36,8 +40,16 @@ export function CarDetailScreen() {
   const { state: entriesState, refresh: refreshEntries } = useEntries(
     carId ?? ''
   );
+  const { state: maintState, refresh: refreshMaint } = useMaintenance(
+    carId ?? ''
+  );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
+  // Maintenance modal state: open + (optional) the entry being edited.
+  // `maintModalOpen` distinguishes create mode (open, no entry) from
+  // closed; `editingMaint` carries the entry in edit mode.
+  const [maintModalOpen, setMaintModalOpen] = useState(false);
+  const [editingMaint, setEditingMaint] = useState<Maintenance | null>(null);
 
   if (state.status === 'loading') {
     return (
@@ -96,6 +108,49 @@ export function CarDetailScreen() {
           onUnshared={refresh}
         />
         {isOwner && <ShareForm car={car} onShared={refresh} />}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Maintenance</h2>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingMaint(null);
+              setMaintModalOpen(true);
+            }}
+            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md min-h-[44px] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Log maintenance
+          </button>
+        </div>
+        {maintState.status === 'loading' && (
+          <p className="text-sm text-gray-500">Loading maintenance…</p>
+        )}
+        {maintState.status === 'error' && (
+          <p className="text-sm text-gray-700">
+            Couldn&rsquo;t load maintenance —{' '}
+            <button
+              type="button"
+              onClick={refreshMaint}
+              className="text-blue-600 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            >
+              try again
+            </button>
+          </p>
+        )}
+        {maintState.status === 'ready' && (
+          <MaintenanceTable
+            maintenance={maintState.maintenance}
+            canEditMaintenance={(m) =>
+              isOwner || m.loggedByUid === user?.uid
+            }
+            onEditMaintenance={(m) => {
+              setEditingMaint(m);
+              setMaintModalOpen(true);
+            }}
+          />
+        )}
       </section>
 
       <section className="flex flex-col gap-4">
@@ -169,6 +224,28 @@ export function CarDetailScreen() {
           onDeleted={() => {
             setEditing(null);
             void refreshEntries();
+          }}
+        />
+      )}
+
+      {maintModalOpen && (
+        <MaintenanceModal
+          carId={carId ?? ''}
+          entry={editingMaint ?? undefined}
+          loggedByUid={user?.uid ?? ''}
+          onClose={() => {
+            setMaintModalOpen(false);
+            setEditingMaint(null);
+          }}
+          onSaved={() => {
+            setMaintModalOpen(false);
+            setEditingMaint(null);
+            void refreshMaint();
+          }}
+          onDeleted={() => {
+            setMaintModalOpen(false);
+            setEditingMaint(null);
+            void refreshMaint();
           }}
         />
       )}

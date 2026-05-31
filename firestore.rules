@@ -59,6 +59,43 @@ service cloud.firestore {
 
     // PRD §6.2 — Car
     match /cars/{carId} {
+      // Shared subcollection authz helpers (maintenance-phase-1 §7.4):
+      // lifted UP from inside the entries block to car scope so BOTH
+      // the entries and maintenance subcollections share them. These
+      // are car-level concepts; behavior is identical to the prior
+      // entries-block definitions. `request`/`resource` resolve at the
+      // CALL SITE — i.e. the subcollection doc being read/mutated — so
+      // canMutate()'s resource.data.loggedByUid refers to the entry or
+      // maintenance doc, not the car (both subcollections carry a
+      // loggedByUid field). The car-level rules below do NOT call these.
+      function parentCar() {
+        return get(/databases/$(database)/documents/cars/$(carId)).data;
+      }
+      function canReadParent() {
+        return request.auth != null && (
+          parentCar().ownerUid == request.auth.uid
+          || request.auth.token.email in parentCar().shareeEmails
+        );
+      }
+      // Owner of the parent car may edit/delete ANY doc on it. The
+      // original logger may edit/delete their OWN doc, but only while
+      // they still have read access to the car — canReadParent() closes
+      // the unshared-former-sharee hole.
+      //
+      // Null-safety (edit-delete-entries dispatch 2026-05-29): the owner
+      // branch parentCar().ownerUid == request.auth.uid is safe on an
+      // unauthenticated request because request.auth.uid is then null and
+      // parentCar().ownerUid == null is false — the unauth caller falls
+      // through to the logger branch, where canReadParent()'s own
+      // request.auth != null check denies. The owner branch's safety does
+      // NOT come from canReadParent(); that helper only guards the logger
+      // branch.
+      function canMutate() {
+        return parentCar().ownerUid == request.auth.uid
+            || (canReadParent()
+                && resource.data.loggedByUid == request.auth.uid);
+      }
+
       // Field/shape validation for a Car create. Authorization
       // (allowlisted + ownerUid == self) is checked separately below.
       function validCarCreate(data) {
@@ -95,18 +132,11 @@ service cloud.firestore {
       allow delete: if request.auth != null
                        && resource.data.ownerUid == request.auth.uid;
 
-      // PRD §6.3 — Entry
+      // PRD §6.3 — Entry. Authz helpers parentCar() / canReadParent() /
+      // canMutate() are now defined at car scope above (lifted in
+      // maintenance-phase-1 §7.4 so maintenance shares them); behavior
+      // here is unchanged.
       match /entries/{entryId} {
-        function parentCar() {
-          return get(/databases/$(database)/documents/cars/$(carId)).data;
-        }
-        function canReadParent() {
-          return request.auth != null && (
-            parentCar().ownerUid == request.auth.uid
-            || request.auth.token.email in parentCar().shareeEmails
-          );
-        }
-
         // Numeric shape for an entry's three editable fields. Validates
         // the RESULTING doc (request.resource.data), so it covers both
         // create and a partial update (the unchanged fields carry their
@@ -120,27 +150,6 @@ service cloud.firestore {
               && data.gallons > 0 && data.gallons < 100000
               && data.cost is number
               && data.cost >= 0 && data.cost < 100000000;
-        }
-
-        // Owner of the parent car may edit/delete ANY entry on it.
-        // The original logger may edit/delete their OWN entry, but
-        // only while they still have read access to the car —
-        // canReadParent() closes the unshared-former-sharee hole (a
-        // removed sharee can't reach back and mutate their old
-        // entries).
-        //
-        // Null-safety (edit-delete-entries dispatch 2026-05-29): the
-        // owner branch parentCar().ownerUid == request.auth.uid is
-        // safe on an unauthenticated request because request.auth.uid
-        // is then null and parentCar().ownerUid == null is false — the
-        // unauth caller falls through to the logger branch, where
-        // canReadParent()'s own request.auth != null check denies. The
-        // owner branch's safety does NOT come from canReadParent();
-        // that helper only guards the logger branch.
-        function canMutate() {
-          return parentCar().ownerUid == request.auth.uid
-              || (canReadParent()
-                  && resource.data.loggedByUid == request.auth.uid);
         }
 
         allow read: if canReadParent();
@@ -173,6 +182,65 @@ service cloud.firestore {
         // M4's owner-only (cascade) rule to owner-or-current-read-
         // access-logger. The owner branch still satisfies the M4
         // cascade in src/cars/cars.ts deleteCar.
+        allow delete: if canMutate();
+      }
+
+      // PRD §14.1/§14.2 — Maintenance (maintenance-phase-1). A SEPARATE
+      // subcollection from entries: the fuel/MPG pipeline stays pure.
+      // Authz reuses the lifted parentCar()/canReadParent()/canMutate()
+      // helpers (maintenance also carries loggedByUid). Field validation
+      // mirrors the entries P1 idiom — with two deliberate differences:
+      //   - `date` is the user-set SERVICE date: typed `is timestamp`
+      //     but NOT pinned to request.time (backdating is the point).
+      //   - `resetsReminder` (Phase 3) is a bool, in the create field
+      //     set and the update editable set so a future checkbox needs
+      //     no rules change; Phase 1's modal never writes it.
+      // `loggedAt` stays the server-set audit timestamp (== request.time
+      // on create; immutable on update via hasOnly).
+      match /maintenance/{maintId} {
+        // SF4 — `is number` (not `is int`), DELIBERATELY mirroring the
+        // entries idiom: dodges the int-vs-double SDK-encoding trap; the
+        // client (validateOdometer) enforces integer-ness for UX.
+        function validMaintNumbers(data) {
+          return data.odometer is number
+              && data.odometer >= 0 && data.odometer < 100000000
+              && data.cost is number
+              && data.cost >= 0 && data.cost < 100000000;
+        }
+
+        allow read: if canReadParent();
+
+        // create: car-reader logging as self; field set pinned, numerics
+        // validated, note non-empty, resetsReminder a bool, loggedAt
+        // server-set. `date` is any timestamp (backdatable) — NOT
+        // request.time.
+        allow create: if canReadParent()
+                         && request.resource.data.keys().hasOnly(
+                              ['loggedByUid', 'date', 'odometer', 'cost',
+                               'note', 'resetsReminder', 'loggedAt'])
+                         && request.resource.data.loggedByUid == request.auth.uid
+                         && request.resource.data.date is timestamp
+                         && request.resource.data.note is string
+                         && request.resource.data.note.size() > 0
+                         && request.resource.data.resetsReminder is bool
+                         && request.resource.data.loggedAt == request.time
+                         && validMaintNumbers(request.resource.data);
+
+        // update: editable set is date/odometer/cost/note/resetsReminder
+        // (resetsReminder included for Phase 3's checkbox — Phase 1 never
+        // sends it). hasOnly makes loggedByUid + loggedAt immutable.
+        // SF1: re-validate resetsReminder is bool on the resulting doc.
+        allow update: if canMutate()
+                         && request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['date', 'odometer', 'cost', 'note',
+                                        'resetsReminder'])
+                         && request.resource.data.date is timestamp
+                         && request.resource.data.note is string
+                         && request.resource.data.note.size() > 0
+                         && request.resource.data.resetsReminder is bool
+                         && validMaintNumbers(request.resource.data);
+
         allow delete: if canMutate();
       }
     }

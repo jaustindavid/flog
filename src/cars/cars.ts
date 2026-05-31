@@ -34,6 +34,7 @@ import {
 } from 'firebase/firestore';
 import { firestore } from '../firebase/firestore';
 import { deleteEntriesForCar } from '../entries/entries';
+import { deleteMaintenanceForCar } from '../maintenance/maintenance';
 
 export interface Car {
   id: string;
@@ -89,11 +90,14 @@ export async function renameCar(carId: string, name: string): Promise<void> {
 
 export async function deleteCar(carId: string): Promise<void> {
   // Cascade per M3 Decision #6, implemented in M4 alongside the
-  // entries-delete rule relaxation. Entries first, car last — a
+  // entries-delete rule relaxation. maintenance-phase-1 §7.2 adds the
+  // maintenance subcollection to the cascade so a car-delete leaves no
+  // orphans in EITHER subcollection. Subcollections first, car last — a
   // partial failure (e.g. one batch commits, the next doesn't) leaves
-  // the car still deletable on retry. Reversing the order would
-  // strand orphaned entries under a deleted parent.
+  // the car still deletable on retry. Reversing the order would strand
+  // orphaned docs under a deleted parent.
   await deleteEntriesForCar(carId);
+  await deleteMaintenanceForCar(carId);
   await deleteDoc(doc(firestore, 'cars', carId));
 }
 
