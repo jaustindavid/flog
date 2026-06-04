@@ -79,17 +79,6 @@ as-is; banner-tap reset stays deliberate (never pre-checked). See PRD
 Likely to come up in the first weeks post-v0, in roughly this order
 (smallest first, so quick wins land before bigger commitments).
 
-- `[~]` **OAuth consent-screen logo** — XS. **Promoted to Soon
-  2026-05-31** (owner effort is low). The in-app branding already
-  shipped — favicon set (`favicon.ico` + 16/32 PNGs), PWA icons
-  (`icon-192`/`icon-512`), and `manifest.webmanifest` are live in
-  `public/`. What's left is uploading a logo to the **Google OAuth
-  consent screen** (the sign-in dialog's app icon). Caveat: a
-  consent-screen logo triggers **Google's brand-verification review**
-  (the Route7 rake) — the upload is quick, but the review is
-  Google-paced and may require a privacy-policy URL + domain match
-  (both already in place). Mostly an owner-console task; no code.
-
 - `[ ]` **CSV export of your data** — S. Committed in PRD §1.4 as
   part of "your data is yours." Per-user: export all entries
   authored by you, plus all entries on cars you own. Open
@@ -442,6 +431,16 @@ validate demand, or genuine future-phase structural work.
 ---
 
 ## Done
+
+- `[~]` **OAuth consent-screen logo** — **WONTFIX 2026-05-31.** Google's
+  brand verification requires a publicly reachable home page; flog's `/`
+  gates straight to sign-in, and Google blocks the upload with "Your
+  home page is behind a login page." The owner has decided **not to add
+  any pre-login / marketing surface**, so this can't proceed — and the
+  logo is purely cosmetic (the app signs in fine without it, on basic
+  scopes). Closed. Reopen only if a public landing page is ever added
+  for some other reason. (In-app branding — favicon + PWA icons — is
+  already live in `public/` and is unaffected.)
 
 - `[x]` **Next-reminder-due display (car-detail + Cars list)** — done
   2026-05-31 (dispatch `next-due-display`; **pending owner V2 + deploy**).

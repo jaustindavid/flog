@@ -107,11 +107,13 @@ and `npm run deploy:rules:{dev,prod}`.
 flog is developed almost entirely through human–AI pairing, using a
 **cuttlefish/nautilus** working model that originated in the *paralarva*
 project-bootstrap kit: a long-context "nautilus" holds the architecture
-and writes dispatch briefs; short-context "cuttlefish" implement them;
-every change is reviewed before it lands. The planning docs (`PRD.md`,
-`AGENTS.md`, and the `dispatch/` briefs and handoffs) are written to be
-cold-readable, so any fresh session can pick up the thread. It's a small
-app with an unusually complete paper trail — that's the point.
+and direction; short-context "cuttlefish" do the bounded work —
+research, design, pre-read review, and implementation — and every change
+is reviewed before it lands. The planning docs (`PRD.md`,
+`WORKING-MODEL.md`, `AGENTS.md`, and the `dispatch/` briefs and
+handoffs) are written to be cold-readable, so any fresh session can pick
+up the thread. It's a small app with an unusually complete paper trail —
+that's the point.
 
 ## License
 
